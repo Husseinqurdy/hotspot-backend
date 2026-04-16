@@ -5,7 +5,7 @@ class RouterSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source='client.business_name', read_only=True)
     class Meta:
         model = MikroTikRouter
-        fields = ['id','client','client_name','name','host','api_port','api_username','api_password','hotspot_interface','is_online','last_seen','created_at']
+        fields = ['id','client','client_name','name','host','api_port','api_username','api_password','hotspot_interface','is_online','last_seen','created_at','updated_at']
         extra_kwargs = {'api_password': {'write_only': True}}
 
 class JobSerializer(serializers.ModelSerializer):

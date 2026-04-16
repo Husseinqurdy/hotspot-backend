@@ -4,5 +4,4 @@ from .models import User
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     list_display = ['username','email','role','is_active']
-    list_filter = ['role','is_active']
     fieldsets = UserAdmin.fieldsets + (('NetSafi',{'fields':('role','phone')}),)

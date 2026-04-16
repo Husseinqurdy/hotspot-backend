@@ -6,9 +6,10 @@ from .models import Client
 class ClientSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
+    user_is_active = serializers.BooleanField(source='user.is_active', read_only=True)
     class Meta:
         model = Client
-        fields = ['id','username','email','business_name','reference_prefix','phone','address','balance','commission_rate','is_active','created_at']
+        fields = ['id','username','email','user_is_active','business_name','reference_prefix','phone','address','balance','commission_rate','is_active','created_at']
         read_only_fields = ['id','reference_prefix','balance','created_at']
 
 class ClientCreateSerializer(serializers.Serializer):
@@ -27,6 +28,9 @@ class ClientCreateSerializer(serializers.Serializer):
         return Client.objects.create(user=user, business_name=validated_data['business_name'], phone=validated_data.get('phone',''), commission_rate=validated_data.get('commission_rate',10.00))
     def to_representation(self, instance):
         return ClientSerializer(instance).data
+
+class ChangePasswordSerializer(serializers.Serializer):
+    new_password = serializers.CharField(min_length=6)
 
 class AddBalanceSerializer(serializers.Serializer):
     amount = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=1)

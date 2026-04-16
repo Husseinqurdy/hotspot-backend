@@ -21,7 +21,6 @@ def check_all_routers():
 
 @shared_task
 def retry_failed_jobs():
-    """Jaribu tena jobs zilizoshindwa kama router iko online."""
     from .models import MikroTikJob
     failed = MikroTikJob.objects.filter(status='failed', retries__lt=3).select_related('router')
     count = 0
@@ -30,4 +29,4 @@ def retry_failed_jobs():
             job.status = MikroTikJob.STATUS_PENDING
             job.save(update_fields=['status'])
             count += 1
-    if count: logger.info(f"Jobs {count} zimewekwa tena kujaribu")
+    if count: logger.info(f"Jobs {count} zimewekwa tena")

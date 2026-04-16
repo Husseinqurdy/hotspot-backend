@@ -6,6 +6,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.utils import timezone
+from django.contrib.auth.hashers import make_password
 
 logger = logging.getLogger('netsafi')
 
@@ -16,16 +17,13 @@ class LoginView(APIView):
     def post(self, request):
         username = request.data.get('username', '').strip()
         password = request.data.get('password', '')
-
         if not username or not password:
-            return Response({'error': 'Username na password zinahitajika'}, status=status.HTTP_400_BAD_REQUEST)
-
+            return Response({'error': 'Username na password zinahitajika'}, status=400)
         user = authenticate(username=username, password=password)
         if not user:
-            return Response({'error': 'Username au password si sahihi'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({'error': 'Username au password si sahihi'}, status=401)
         if not user.is_active:
-            return Response({'error': 'Akaunti imezuiwa'}, status=status.HTTP_403_FORBIDDEN)
-
+            return Response({'error': 'Akaunti yako imezuiwa. Wasiliana na msimamizi.'}, status=403)
         refresh = RefreshToken.for_user(user)
         data = {
             'access': str(refresh.access_token),
@@ -47,8 +45,7 @@ class SuperAdminDashboardView(APIView):
 
     def get(self, request):
         if not request.user.is_superadmin():
-            return Response(status=status.HTTP_403_FORBIDDEN)
-
+            return Response(status=403)
         from apps.clients.models import Client
         from apps.routers.models import MikroTikRouter, MikroTikJob
         from apps.payments.models import Payment
@@ -63,13 +60,20 @@ class SuperAdminDashboardView(APIView):
             clients_data.append({
                 'id': c.id, 'business_name': c.business_name,
                 'reference_prefix': c.reference_prefix, 'balance': str(c.balance),
-                'commission_rate': str(c.commission_rate), 'is_active': c.is_active,
+                'commission_rate': str(c.commission_rate),
+                'is_active': c.is_active,
+                'username': c.user.username,
+                'email': c.user.email,
+                'phone': c.phone,
                 'total_payments': Payment.objects.filter(client=c, status='completed').count(),
+                'total_vouchers': Voucher.objects.filter(client=c).count(),
+                'total_routers': MikroTikRouter.objects.filter(client=c).count(),
             })
 
         return Response({
             'stats': {
                 'total_clients': Client.objects.count(),
+                'active_clients': Client.objects.filter(is_active=True).count(),
                 'total_routers': MikroTikRouter.objects.count(),
                 'online_routers': MikroTikRouter.objects.filter(is_online=True).count(),
                 'today_revenue': str(sum(p.amount for p in today_payments)),
@@ -88,8 +92,7 @@ class ClientDashboardView(APIView):
 
     def get(self, request):
         if not request.user.is_client():
-            return Response(status=status.HTTP_403_FORBIDDEN)
-
+            return Response(status=403)
         from apps.clients.models import Client
         from apps.routers.models import MikroTikRouter
         from apps.packages.models import Package
@@ -99,17 +102,11 @@ class ClientDashboardView(APIView):
 
         client = Client.objects.get(user=request.user)
         today = timezone.now().date()
-
         today_payments = Payment.objects.filter(client=client, status='completed', created_at__date=today)
         today_vouchers = Voucher.objects.filter(client=client, created_at__date=today)
-
-        # Lipa namba za active devices - dynamic, si hardcoded
         devices = GSMDevice.objects.filter(is_active=True).order_by('network')
         lipa_numbers = [{'network': d.network, 'network_display': d.get_network_display(), 'lipa_number': d.lipa_number} for d in devices]
-
-        recent = []
-        for v in today_vouchers.select_related('package').order_by('-created_at')[:10]:
-            recent.append({'code': v.code, 'package': v.package.name, 'customer_phone': v.customer_phone, 'status': v.status, 'created_at': v.created_at})
+        recent = [{'code': v.code, 'package': v.package.name, 'customer_phone': v.customer_phone, 'status': v.status, 'created_at': v.created_at} for v in today_vouchers.select_related('package').order_by('-created_at')[:10]]
 
         return Response({
             'client': {'business_name': client.business_name, 'reference_prefix': client.reference_prefix, 'balance': str(client.balance)},
@@ -121,6 +118,7 @@ class ClientDashboardView(APIView):
                 'today_payments': today_payments.count(),
                 'today_vouchers': today_vouchers.count(),
                 'today_revenue': str(sum(p.client_share for p in today_payments)),
+                'month_revenue': str(sum(p.client_share for p in Payment.objects.filter(client=client, status='completed', created_at__month=today.month))),
             },
             'recent_vouchers': recent,
         })
