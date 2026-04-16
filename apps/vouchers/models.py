@@ -4,7 +4,6 @@ from apps.clients.models import Client
 from apps.routers.models import MikroTikRouter
 from apps.packages.models import Package
 from apps.payments.models import Payment
-
 class Voucher(models.Model):
     STATUS_CHOICES = [('active','Active'),('used','Imetumika'),('expired','Imeisha')]
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='vouchers')

@@ -4,7 +4,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .models import GSMDevice
 from .serializers import GSMDeviceSerializer, GSMDevicePublicSerializer
-
 class GSMDeviceViewSet(viewsets.ModelViewSet):
     queryset = GSMDevice.objects.all()
     serializer_class = GSMDeviceSerializer

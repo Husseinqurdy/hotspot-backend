@@ -1,10 +1,7 @@
 from django.db import models
 from apps.clients.models import Client
 class Payment(models.Model):
-    STATUS_PENDING = 'pending'
-    STATUS_PROCESSING = 'processing'
-    STATUS_COMPLETED = 'completed'
-    STATUS_FAILED = 'failed'
+    STATUS_PENDING = 'pending'; STATUS_PROCESSING = 'processing'; STATUS_COMPLETED = 'completed'; STATUS_FAILED = 'failed'
     STATUS_CHOICES = [(STATUS_PENDING,'Inasubiri'),(STATUS_PROCESSING,'Inachakatwa'),(STATUS_COMPLETED,'Imekamilika'),(STATUS_FAILED,'Imeshindwa')]
     NETWORK_CHOICES = [('vodacom','Vodacom M-Pesa'),('tigo','Tigo Pesa'),('airtel','Airtel Money'),('halo','HaloPesa'),('unknown','Haijulikani')]
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='payments')
@@ -19,6 +16,5 @@ class Payment(models.Model):
     commission_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     client_share = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
     class Meta: ordering = ['-created_at']
     def __str__(self): return f"{self.client} | TZS {self.amount} | {self.status}"

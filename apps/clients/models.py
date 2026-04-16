@@ -23,7 +23,5 @@ class Client(models.Model):
         if not self.reference_prefix:
             self.reference_prefix = generate_unique_prefix()
         super().save(*args, **kwargs)
-    class Meta:
-        ordering = ['-created_at']
-    def __str__(self):
-        return f"{self.business_name} [{self.reference_prefix}]"
+    class Meta: ordering = ['-created_at']
+    def __str__(self): return f"{self.business_name} [{self.reference_prefix}]"
