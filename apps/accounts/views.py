@@ -28,13 +28,24 @@ class LoginView(APIView):
         data = {
             'access': str(refresh.access_token),
             'refresh': str(refresh),
-            'user': {'id': user.id, 'username': user.username, 'email': user.email, 'role': user.role, 'full_name': user.get_full_name()}
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'role': user.role,
+                'full_name': user.get_full_name()
+            }
         }
         if user.is_client():
             try:
                 from apps.clients.models import Client
                 c = Client.objects.get(user=user)
-                data['client'] = {'id': c.id, 'business_name': c.business_name, 'reference_prefix': c.reference_prefix, 'balance': str(c.balance)}
+                data['client'] = {
+                    'id': c.id,
+                    'business_name': c.business_name,
+                    'identifier': c.identifier,  # ✅ reference_prefix → identifier
+                    'balance': str(c.balance)
+                }
             except Exception:
                 pass
         return Response(data)
@@ -58,8 +69,10 @@ class SuperAdminDashboardView(APIView):
         clients_data = []
         for c in Client.objects.select_related('user').all():
             clients_data.append({
-                'id': c.id, 'business_name': c.business_name,
-                'reference_prefix': c.reference_prefix, 'balance': str(c.balance),
+                'id': c.id,
+                'business_name': c.business_name,
+                'identifier': c.identifier,  # ✅ reference_prefix → identifier
+                'balance': str(c.balance),
                 'commission_rate': str(c.commission_rate),
                 'is_active': c.is_active,
                 'username': c.user.username,
@@ -105,11 +118,31 @@ class ClientDashboardView(APIView):
         today_payments = Payment.objects.filter(client=client, status='completed', created_at__date=today)
         today_vouchers = Voucher.objects.filter(client=client, created_at__date=today)
         devices = GSMDevice.objects.filter(is_active=True).order_by('network')
-        lipa_numbers = [{'network': d.network, 'network_display': d.get_network_display(), 'lipa_number': d.lipa_number} for d in devices]
-        recent = [{'code': v.code, 'package': v.package.name, 'customer_phone': v.customer_phone, 'status': v.status, 'created_at': v.created_at} for v in today_vouchers.select_related('package').order_by('-created_at')[:10]]
+        lipa_numbers = [
+            {
+                'network': d.network,
+                'network_display': d.get_network_display(),
+                'lipa_number': d.lipa_number
+            }
+            for d in devices
+        ]
+        recent = [
+            {
+                'code': v.code,
+                'package': v.package.name,
+                'customer_phone': v.customer_phone,
+                'status': v.status,
+                'created_at': v.created_at
+            }
+            for v in today_vouchers.select_related('package').order_by('-created_at')[:10]
+        ]
 
         return Response({
-            'client': {'business_name': client.business_name, 'reference_prefix': client.reference_prefix, 'balance': str(client.balance)},
+            'client': {
+                'business_name': client.business_name,
+                'identifier': client.identifier,  # ✅ reference_prefix → identifier
+                'balance': str(client.balance)
+            },
             'lipa_numbers': lipa_numbers,
             'stats': {
                 'total_routers': MikroTikRouter.objects.filter(client=client).count(),
@@ -118,7 +151,9 @@ class ClientDashboardView(APIView):
                 'today_payments': today_payments.count(),
                 'today_vouchers': today_vouchers.count(),
                 'today_revenue': str(sum(p.client_share for p in today_payments)),
-                'month_revenue': str(sum(p.client_share for p in Payment.objects.filter(client=client, status='completed', created_at__month=today.month))),
+                'month_revenue': str(sum(p.client_share for p in Payment.objects.filter(
+                    client=client, status='completed', created_at__month=today.month
+                ))),
             },
             'recent_vouchers': recent,
         })
