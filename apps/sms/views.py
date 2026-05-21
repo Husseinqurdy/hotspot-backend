@@ -43,7 +43,7 @@ class ReceiveSMSView(APIView):
 class OutgoingSMSView(APIView):
     permission_classes = [AllowAny]
     def get(self, request):
-        if request.query_params.get('secret','') != settings.DEVICE_API_KEY:
+        if request.GET.get('secret','') != settings.DEVICE_API_KEY:
             return Response({'error':'Unauthorized'}, status=401)
         from .models import OutgoingSMS
         sms_list = OutgoingSMS.objects.filter(status='queued').order_by('-priority','created_at')[:10]
