@@ -37,7 +37,7 @@ class ReceiveSMSView(APIView):
             except: pass
         network = network_hint if network_hint else detect_network(phone)
         from apps.sms.tasks import process_payment_sms
-        process_payment_sms.delay(phone=phone, sms_text=message, network=network, device_id=device_id)
+        process_payment_sms.apply(kwargs={'phone': phone, 'sms_text': message, 'network': network, 'device_id': device_id})
         return Response({'status':'received','network':network})
 
 class OutgoingSMSView(APIView):
