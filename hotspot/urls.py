@@ -4,10 +4,10 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from apps.accounts.views import LoginView, SuperAdminDashboardView, ClientDashboardView
 from apps.routers.job_views import PendingJobsView, CompleteJobView
 from apps.routers.mikrotik_views import (
-    RouterStatusView, RouterInterfacesView, RouterIPAddressesView,
+    HotspotCookiesView, HotspotHostsView, HotspotServersView, IPBindingsView, RouterStatusView, RouterInterfacesView, RouterIPAddressesView,
     HotspotUsersView, HotspotActiveSessionsView, HotspotUserDeleteView,
     RouterRestartView, BandwidthView, RouterFirewallView,
-    HotspotProfilesView, RouterLogsView, RouterDNSView,
+    HotspotProfilesView, RouterLogsView, RouterDNSView, WalledGardenIPView, WalledGardenView,
 )
 
 urlpatterns = [
@@ -39,7 +39,7 @@ urlpatterns = [
     path('api/mikrotik/<int:router_id>/interfaces/', RouterInterfacesView.as_view()),
     path('api/mikrotik/<int:router_id>/ip-addresses/', RouterIPAddressesView.as_view()),
     path('api/mikrotik/<int:router_id>/hotspot/users/', HotspotUsersView.as_view()),
-    path('api/mikrotik/<int:router_id>/hotspot/users/<str:username>/delete/', HotspotUserDeleteView.as_view()),
+    path('api/mikrotik/<int:router_id>/hotspot/users/delete/', HotspotUserDeleteView.as_view()),
     path('api/mikrotik/<int:router_id>/hotspot/sessions/', HotspotActiveSessionsView.as_view()),
     path('api/mikrotik/<int:router_id>/hotspot/profiles/', HotspotProfilesView.as_view()),
     path('api/mikrotik/<int:router_id>/restart/', RouterRestartView.as_view()),
@@ -47,4 +47,10 @@ urlpatterns = [
     path('api/mikrotik/<int:router_id>/firewall/', RouterFirewallView.as_view()),
     path('api/mikrotik/<int:router_id>/logs/', RouterLogsView.as_view()),
     path('api/mikrotik/<int:router_id>/dns/', RouterDNSView.as_view()),
+    path('api/mikrotik/<int:router_id>/hotspot/servers/', HotspotServersView.as_view()),
+    path('api/mikrotik/<int:router_id>/hotspot/hosts/', HotspotHostsView.as_view()),
+    path('api/mikrotik/<int:router_id>/hotspot/ip-bindings/', IPBindingsView.as_view()),
+    path('api/mikrotik/<int:router_id>/hotspot/walled-garden/', WalledGardenView.as_view()),
+    path('api/mikrotik/<int:router_id>/hotspot/walled-garden-ip/', WalledGardenIPView.as_view()),
+    path('api/mikrotik/<int:router_id>/hotspot/cookies/', HotspotCookiesView.as_view()),
 ]

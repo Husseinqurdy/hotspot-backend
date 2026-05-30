@@ -202,7 +202,7 @@ class MikroTikAPI:
         try:
             users = self.command('/ip/hotspot/user/print', queries={'name': username})
             for u in users:
-                self.command('/ip/hotspot/user/remove', {'=.id': u['.id']})
+                self.command('/ip/hotspot/user/remove', {'.id': u['.id']})
             return True
         except Exception as e:
             logger.error(f"Delete hotspot user failed: {e}")
@@ -213,7 +213,7 @@ class MikroTikAPI:
 
     def disconnect_session(self, session_id):
         try:
-            self.command('/ip/hotspot/active/remove', {'=.id': session_id})
+            self.command('/ip/hotspot/active/remove', {'.id': session_id})
             return True
         except:
             return False
@@ -270,6 +270,129 @@ class MikroTikAPI:
         except:
             return []
 
+   # ── HOTSPOT SERVERS ───────────────────────────────────
+
+    def get_hotspot_servers(self):
+        """IP/Hotspot → Servers"""
+        return self.command('/ip/hotspot/print')
+
+    # ── HOTSPOT HOSTS ─────────────────────────────────────
+
+    def get_hotspot_hosts(self):
+        """IP/Hotspot → Hosts - vifaa vyote vilivyounganika"""
+        return self.command('/ip/hotspot/host/print')
+
+    # ── IP BINDINGS ───────────────────────────────────────
+
+    def get_ip_bindings(self):
+        """IP/Hotspot → IP Bindings"""
+        return self.command('/ip/hotspot/ip-binding/print')
+
+    def add_ip_binding(self, mac_address, ip_address='', binding_type='regular', comment=''):
+        """Ongeza IP Binding"""
+        try:
+            params = {
+                'mac-address': mac_address,
+                'type': binding_type,
+            }
+            if ip_address:
+                params['address'] = ip_address
+            if comment:
+                params['comment'] = comment
+            self.command('/ip/hotspot/ip-binding/add', params)
+            return True
+        except Exception as e:
+            logger.error(f"Add IP binding failed: {e}")
+            return False
+
+    def remove_ip_binding(self, binding_id):
+        """Futa IP Binding"""
+        try:
+            self.command('/ip/hotspot/ip-binding/remove', {'.id': binding_id})
+            return True
+        except Exception as e:
+            logger.error(f"Remove IP binding failed: {e}")
+            return False
+
+    # ── WALLED GARDEN ─────────────────────────────────────
+
+    def get_walled_garden(self):
+        """IP/Hotspot → Walled Garden (HTTP)"""
+        return self.command('/ip/hotspot/walled-garden/print')
+
+    def add_walled_garden(self, dst_host, action='allow', comment=''):
+        """Ongeza Walled Garden entry"""
+        try:
+            params = {'dst-host': dst_host, 'action': action}
+            if comment:
+                params['comment'] = comment
+            self.command('/ip/hotspot/walled-garden/add', params)
+            return True
+        except Exception as e:
+            logger.error(f"Add walled garden failed: {e}")
+            return False
+
+    def remove_walled_garden(self, entry_id):
+        """Futa Walled Garden entry"""
+        try:
+            self.command('/ip/hotspot/walled-garden/remove', {'.id': entry_id})
+            return True
+        except Exception as e:
+            logger.error(f"Remove walled garden failed: {e}")
+            return False
+
+    # ── WALLED GARDEN IP ──────────────────────────────────
+
+    def get_walled_garden_ip(self):
+        """IP/Hotspot → Walled Garden IP List (HTTPS/IP)"""
+        return self.command('/ip/hotspot/walled-garden/ip/print')
+
+    def add_walled_garden_ip(self, dst_address, action='accept', comment=''):
+        """Ongeza Walled Garden IP entry"""
+        try:
+            params = {'dst-address': dst_address, 'action': action}
+            if comment:
+                params['comment'] = comment
+            self.command('/ip/hotspot/walled-garden/ip/add', params)
+            return True
+        except Exception as e:
+            logger.error(f"Add walled garden IP failed: {e}")
+            return False
+
+    def remove_walled_garden_ip(self, entry_id):
+        """Futa Walled Garden IP entry"""
+        try:
+            self.command('/ip/hotspot/walled-garden/ip/remove', {'.id': entry_id})
+            return True
+        except Exception as e:
+            logger.error(f"Remove walled garden IP failed: {e}")
+            return False
+
+    # ── COOKIES ───────────────────────────────────────────
+
+    def get_hotspot_cookies(self):
+        """IP/Hotspot → Cookies"""
+        return self.command('/ip/hotspot/cookie/print')
+
+    def remove_hotspot_cookie(self, cookie_id):
+        """Futa cookie moja"""
+        try:
+            self.command('/ip/hotspot/cookie/remove', {'.id': cookie_id})
+            return True
+        except Exception as e:
+            logger.error(f"Remove cookie failed: {e}")
+            return False
+
+    def clear_all_cookies(self):
+        """Futa cookies zote"""
+        try:
+            cookies = self.get_hotspot_cookies()
+            for c in cookies:
+                self.command('/ip/hotspot/cookie/remove', {'.id': c['.id']})
+            return True
+        except Exception as e:
+            logger.error(f"Clear all cookies failed: {e}")
+            return False
 
 def get_mikrotik_connection(router):
     """Pata MikroTik connection kupitia WireGuard VPN."""

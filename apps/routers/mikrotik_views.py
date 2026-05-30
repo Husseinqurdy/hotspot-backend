@@ -156,10 +156,12 @@ class HotspotUsersView(APIView):
 
 
 class HotspotUserDeleteView(APIView):
-    """Futa hotspot user."""
     permission_classes = [IsAuthenticated]
 
-    def delete(self, request, router_id, username):
+    def delete(self, request, router_id):
+        username = request.data.get('username')
+        if not username:
+            return Response({'error': 'username inahitajika'}, status=400)
         router = get_router_for_user(router_id, request.user)
         if not router:
             return Response({'error': 'Router haikupatikana'}, status=404)
@@ -175,7 +177,6 @@ class HotspotUserDeleteView(APIView):
             return Response({'error': str(e)}, status=500)
         finally:
             api.disconnect()
-
 
 class HotspotActiveSessionsView(APIView):
     """Active sessions - watumiaji waliounganishwa sasa."""
@@ -349,6 +350,275 @@ class RouterDNSView(APIView):
         try:
             dns = api.get_dns()
             return Response({'dns': dns})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+
+class HotspotServersView(APIView):
+    """IP/Hotspot → Servers - seva zote za hotspot."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, router_id):
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            servers = api.get_hotspot_servers()
+            return Response({'servers': servers, 'count': len(servers)})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+
+class HotspotHostsView(APIView):
+    """IP/Hotspot → Hosts - vifaa vyote vilivyounganika."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, router_id):
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            hosts = api.get_hotspot_hosts()
+            return Response({'hosts': hosts, 'count': len(hosts)})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+
+class IPBindingsView(APIView):
+    """IP/Hotspot → IP Bindings."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, router_id):
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            bindings = api.get_ip_bindings()
+            return Response({'bindings': bindings, 'count': len(bindings)})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+    def post(self, request, router_id):
+        """Ongeza IP Binding."""
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            mac = request.data.get('mac_address', '')
+            ip = request.data.get('ip_address', '')
+            btype = request.data.get('type', 'regular')
+            comment = request.data.get('comment', '')
+            if not mac:
+                return Response({'error': 'mac_address inahitajika'}, status=400)
+            success = api.add_ip_binding(mac, ip, btype, comment)
+            if success:
+                return Response({'message': f'IP Binding imeongezwa'})
+            return Response({'error': 'Imeshindwa kuongeza binding'}, status=400)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+    def delete(self, request, router_id):
+        """Futa IP Binding."""
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        binding_id = request.data.get('binding_id')
+        if not binding_id:
+            return Response({'error': 'binding_id inahitajika'}, status=400)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            success = api.remove_ip_binding(binding_id)
+            return Response({'message': 'Binding imefutwa' if success else 'Imeshindwa'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+
+class WalledGardenView(APIView):
+    """IP/Hotspot → Walled Garden (HTTP)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, router_id):
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            entries = api.get_walled_garden()
+            return Response({'entries': entries, 'count': len(entries)})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+    def post(self, request, router_id):
+        """Ongeza Walled Garden entry."""
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            dst_host = request.data.get('dst_host', '')
+            action = request.data.get('action', 'allow')
+            comment = request.data.get('comment', '')
+            if not dst_host:
+                return Response({'error': 'dst_host inahitajika'}, status=400)
+            success = api.add_walled_garden(dst_host, action, comment)
+            if success:
+                return Response({'message': f'{dst_host} imeongezwa kwenye Walled Garden'})
+            return Response({'error': 'Imeshindwa kuongeza'}, status=400)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+    def delete(self, request, router_id):
+        """Futa Walled Garden entry."""
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        entry_id = request.data.get('entry_id')
+        if not entry_id:
+            return Response({'error': 'entry_id inahitajika'}, status=400)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            success = api.remove_walled_garden(entry_id)
+            return Response({'message': 'Imefutwa' if success else 'Imeshindwa'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+
+class WalledGardenIPView(APIView):
+    """IP/Hotspot → Walled Garden IP List."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, router_id):
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            entries = api.get_walled_garden_ip()
+            return Response({'entries': entries, 'count': len(entries)})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+    def post(self, request, router_id):
+        """Ongeza Walled Garden IP entry."""
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            dst_address = request.data.get('dst_address', '')
+            action = request.data.get('action', 'accept')
+            comment = request.data.get('comment', '')
+            if not dst_address:
+                return Response({'error': 'dst_address inahitajika'}, status=400)
+            success = api.add_walled_garden_ip(dst_address, action, comment)
+            if success:
+                return Response({'message': f'{dst_address} imeongezwa'})
+            return Response({'error': 'Imeshindwa kuongeza'}, status=400)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+    def delete(self, request, router_id):
+        """Futa Walled Garden IP entry."""
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        entry_id = request.data.get('entry_id')
+        if not entry_id:
+            return Response({'error': 'entry_id inahitajika'}, status=400)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            success = api.remove_walled_garden_ip(entry_id)
+            return Response({'message': 'Imefutwa' if success else 'Imeshindwa'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+
+class HotspotCookiesView(APIView):
+    """IP/Hotspot → Cookies."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, router_id):
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            cookies = api.get_hotspot_cookies()
+            return Response({'cookies': cookies, 'count': len(cookies)})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+    def delete(self, request, router_id):
+        """Futa cookie moja au zote."""
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            cookie_id = request.data.get('cookie_id')
+            if cookie_id:
+                success = api.remove_hotspot_cookie(cookie_id)
+                return Response({'message': 'Cookie imefutwa' if success else 'Imeshindwa'})
+            else:
+                # Futa zote
+                success = api.clear_all_cookies()
+                return Response({'message': 'Cookies zote zimefutwa' if success else 'Imeshindwa'})
         except Exception as e:
             return Response({'error': str(e)}, status=500)
         finally:
