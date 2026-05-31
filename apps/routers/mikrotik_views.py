@@ -178,6 +178,7 @@ class HotspotUserDeleteView(APIView):
         finally:
             api.disconnect()
 
+
 class HotspotActiveSessionsView(APIView):
     """Active sessions - watumiaji waliounganishwa sasa."""
     permission_classes = [IsAuthenticated]
@@ -276,7 +277,7 @@ class BandwidthView(APIView):
         try:
             interfaces = api.get_interfaces()
             traffic_data = []
-            for iface in interfaces[:5]:  # Top 5 interfaces
+            for iface in interfaces[:5]:
                 name = iface.get('name', '')
                 if name:
                     traffic = api.get_interface_traffic(name)
@@ -432,7 +433,7 @@ class IPBindingsView(APIView):
                 return Response({'error': 'mac_address inahitajika'}, status=400)
             success = api.add_ip_binding(mac, ip, btype, comment)
             if success:
-                return Response({'message': f'IP Binding imeongezwa'})
+                return Response({'message': 'IP Binding imeongezwa'})
             return Response({'error': 'Imeshindwa kuongeza binding'}, status=400)
         except Exception as e:
             return Response({'error': str(e)}, status=500)
@@ -616,9 +617,120 @@ class HotspotCookiesView(APIView):
                 success = api.remove_hotspot_cookie(cookie_id)
                 return Response({'message': 'Cookie imefutwa' if success else 'Imeshindwa'})
             else:
-                # Futa zote
                 success = api.clear_all_cookies()
                 return Response({'message': 'Cookies zote zimefutwa' if success else 'Imeshindwa'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+
+class SchedulerView(APIView):
+    """System → Scheduler - scripts zinazotekelezwa kwa wakati maalum."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, router_id):
+        """Orodha ya schedulers zote."""
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            schedulers = api.get_schedulers()
+            return Response({'schedulers': schedulers, 'count': len(schedulers)})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+    def post(self, request, router_id):
+        """Ongeza scheduler mpya."""
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            name = request.data.get('name', '')
+            on_event = request.data.get('on_event', '')
+            if not name:
+                return Response({'error': 'name inahitajika'}, status=400)
+            if not on_event:
+                return Response({'error': 'on_event (script) inahitajika'}, status=400)
+
+            params = {
+                'name': name,
+                'start-date': request.data.get('start_date', 'jan/01/1970'),
+                'start-time': request.data.get('start_time', '00:00:00'),
+                'interval': request.data.get('interval', '00:00:00'),
+                'on-event': on_event,
+                'policy': request.data.get('policy', 'read,write,reboot'),
+                'comment': request.data.get('comment', ''),
+                'disabled': request.data.get('disabled', 'false'),
+            }
+            success = api.add_scheduler(params)
+            if success:
+                return Response({'message': f'Scheduler "{name}" imeongezwa'})
+            return Response({'error': 'Imeshindwa kuongeza scheduler'}, status=400)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+    def patch(self, request, router_id):
+        """Hariri scheduler iliyopo (pia enable/disable)."""
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        scheduler_id = request.data.get('scheduler_id')
+        if not scheduler_id:
+            return Response({'error': 'scheduler_id inahitajika'}, status=400)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            # Jenga params — tuma tu fields zilizotumwa
+            params = {'id': scheduler_id}
+            field_map = {
+                'name':       'name',
+                'start_date': 'start-date',
+                'start_time': 'start-time',
+                'interval':   'interval',
+                'on_event':   'on-event',
+                'policy':     'policy',
+                'comment':    'comment',
+                'disabled':   'disabled',
+            }
+            for key, mt_key in field_map.items():
+                if key in request.data:
+                    params[mt_key] = request.data[key]
+
+            success = api.edit_scheduler(params)
+            if success:
+                return Response({'message': 'Scheduler imesasishwa'})
+            return Response({'error': 'Imeshindwa kusasisha scheduler'}, status=400)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+        finally:
+            api.disconnect()
+
+    def delete(self, request, router_id):
+        """Futa scheduler."""
+        router = get_router_for_user(router_id, request.user)
+        if not router:
+            return Response({'error': 'Router haikupatikana'}, status=404)
+        scheduler_id = request.data.get('scheduler_id')
+        if not scheduler_id:
+            return Response({'error': 'scheduler_id inahitajika'}, status=400)
+        api = get_mikrotik_connection(router)
+        if not api:
+            return Response({'error': 'Router haipo online'}, status=503)
+        try:
+            success = api.remove_scheduler(scheduler_id)
+            return Response({'message': 'Scheduler imefutwa' if success else 'Imeshindwa'})
         except Exception as e:
             return Response({'error': str(e)}, status=500)
         finally:

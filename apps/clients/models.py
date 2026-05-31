@@ -11,6 +11,21 @@ def generate_identifier():
         return 1
 
 
+# Features zote za MikroTik Manager
+MIKROTIK_FEATURES = [
+    'servers',
+    'server_profiles',
+    'users',
+    'active',
+    'hosts',
+    'ip_bindings',
+    'walled_garden',
+    'walled_garden_ip',
+    'cookies',
+    'scheduler',
+]
+
+
 class Client(models.Model):
     user = models.OneToOneField(
         User,
@@ -37,6 +52,16 @@ class Client(models.Model):
         default=10.00
     )
     is_active = models.BooleanField(default=True)
+
+    # Permissions za MikroTik — list ya features zilizoruhusiwa
+    # Kama field iko tupu (None au []), client hawezi kuona chochote
+    # Kama ina ['servers', 'users', ...], anaona hizo tu
+    mikrotik_permissions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Features za MikroTik ambazo client amepewa ruhusa"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -44,6 +69,10 @@ class Client(models.Model):
         if not self.identifier:
             self.identifier = generate_identifier()
         super().save(*args, **kwargs)
+
+    def has_mikrotik_permission(self, feature: str) -> bool:
+        """Angalia kama client ana ruhusa ya feature fulani."""
+        return feature in (self.mikrotik_permissions or [])
 
     class Meta:
         ordering = ['-created_at']

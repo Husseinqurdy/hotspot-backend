@@ -270,7 +270,7 @@ class MikroTikAPI:
         except:
             return []
 
-   # ── HOTSPOT SERVERS ───────────────────────────────────
+    # ── HOTSPOT SERVERS ───────────────────────────────────
 
     def get_hotspot_servers(self):
         """IP/Hotspot → Servers"""
@@ -393,6 +393,49 @@ class MikroTikAPI:
         except Exception as e:
             logger.error(f"Clear all cookies failed: {e}")
             return False
+
+    # ── SCHEDULER ─────────────────────────────────────────
+
+    def get_schedulers(self):
+        """System → Scheduler - orodha ya schedulers zote."""
+        return self.command('/system/scheduler/print')
+
+    def add_scheduler(self, params):
+        """Ongeza scheduler mpya.
+
+        params ni dict inayoweza kuwa na:
+          name, start-date, start-time, interval,
+          on-event, policy, comment, disabled
+        """
+        try:
+            self.command('/system/scheduler/add', params)
+            return True
+        except Exception as e:
+            logger.error(f"Add scheduler failed: {e}")
+            return False
+
+    def edit_scheduler(self, params):
+        """Hariri scheduler iliyopo.
+
+        params lazima iwe na '.id' ya scheduler inayolengwa.
+        Fields zingine ni za hiari — tuma tu zinazobadilika.
+        """
+        try:
+            self.command('/system/scheduler/set', params)
+            return True
+        except Exception as e:
+            logger.error(f"Edit scheduler failed: {e}")
+            return False
+
+    def remove_scheduler(self, scheduler_id):
+        """Futa scheduler kwa .id yake."""
+        try:
+            self.command('/system/scheduler/remove', {'.id': scheduler_id})
+            return True
+        except Exception as e:
+            logger.error(f"Remove scheduler failed: {e}")
+            return False
+
 
 def get_mikrotik_connection(router):
     """Pata MikroTik connection kupitia WireGuard VPN."""
