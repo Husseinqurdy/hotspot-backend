@@ -16,11 +16,8 @@ class Package(models.Model):
     name = models.CharField(max_length=100)
     price = models.DecimalField(max_digits=8, decimal_places=2)
 
-    # ── Duration: tumia hours au days, si minutes ─────────────────────────
     duration_value = models.IntegerField(default=1)
     duration_unit = models.CharField(max_length=10, choices=DURATION_UNIT_CHOICES, default='hours')
-
-    # ── Bado tunaweka duration_minutes kwa compatibility na MikroTik ──────
     duration_minutes = models.IntegerField(default=60, editable=False)
 
     speed_up = models.CharField(max_length=10, default='2')
@@ -38,7 +35,6 @@ class Package(models.Model):
         return f"{self.name} - TZS {self.price}"
 
     def _compute_duration_minutes(self):
-        """Badilisha hours/days → minutes kwa MikroTik."""
         if self.duration_unit == 'hours':
             return self.duration_value * 60
         elif self.duration_unit == 'days':
@@ -53,12 +49,37 @@ class Package(models.Model):
             return f"{self.duration_value * 24}h"
         return f"{self.duration_minutes}m"
 
+    def _scheduler_interval(self):
+        """
+        Interval ya scheduler inayokimbia kufuta vouchers zilizoisha muda.
+        - Package za saa  → scheduler inakimbia kila dakika 1
+        - Package za siku → scheduler inakimbia kila dakika 5
+        """
+        if self.duration_unit == 'hours':
+            return '00:01:00'   # Kila dakika moja
+        elif self.duration_unit == 'days':
+            return '00:05:00'   # Kila dakika tano
+        return '00:01:00'
+
+    def _mikrotik_limit_uptime(self):
+        """
+        limit-uptime kwa MikroTik hotspot user — hii ndio inayodhibiti
+        muda wa voucher bila scheduler.
+        - 1h  → 01:00:00
+        - 2h  → 02:00:00
+        - 1d  → 1d 00:00:00
+        """
+        if self.duration_unit == 'hours':
+            return f"{self.duration_value:02d}:00:00"
+        elif self.duration_unit == 'days':
+            return f"{self.duration_value}d 00:00:00"
+        return f"01:00:00"
+
     def duration_display(self):
         if self.duration_unit == 'hours':
             return f"Saa {self.duration_value}"
         elif self.duration_unit == 'days':
             return f"Siku {self.duration_value}"
-        # fallback kwa data za zamani
         if self.duration_minutes < 60:
             return f"Dakika {self.duration_minutes}"
         elif self.duration_minutes < 1440:
@@ -87,7 +108,6 @@ class Package(models.Model):
             pass
 
     def save(self, *args, **kwargs):
-        # ── Hesabu duration_minutes kiotomatiki ──────────────────────────
         self.duration_minutes = self._compute_duration_minutes()
 
         is_new = self.pk is None
@@ -129,7 +149,12 @@ class Package(models.Model):
         self._delete_from_mikrotik(profile_name, client)
 
     def _sync_to_mikrotik(self):
-        """Unda au sasisha profile + script kwenye MikroTik routers zote za client."""
+        """
+        Unda au sasisha kwenye MikroTik routers zote za client:
+          1. Hotspot user profile (speed + session-timeout + shared-users)
+          2. Scheduler moja ya package — inakimbia kila muda mfupi na
+             kufuta vouchers ZOTE za profile hii ambazo zimefika limit-uptime
+        """
         try:
             from apps.routers.models import MikroTikRouter
             from apps.routers.mikrotik import get_mikrotik_connection
@@ -139,8 +164,45 @@ class Package(models.Model):
                 logger.warning(f"Hakuna router online ya {self.client.business_name}")
                 return
 
-            rate_limit = f"{self.speed_up}M/{self.speed_down}M"
+            rate_limit      = f"{self.speed_up}M/{self.speed_down}M"
             session_timeout = self._mikrotik_session_timeout()
+            limit_uptime    = self._mikrotik_limit_uptime()
+            interval        = self._scheduler_interval()
+            sched_name      = f"expire-{self.mikrotik_profile}"
+
+            # ── On Login script — inawekwa kwenye Hotspot User Profile → Scripts ──
+            # Pale mtumiaji anapoingiza voucher (login), MikroTik inatekeleza
+            # script hii moja kwa moja. Inafanya:
+            #   1. Angalia kama scheduler ya voucher hii ipo tayari
+            #   2. Kama haipo — iunda scheduler yenye interval = muda wa package
+            #   3. Scheduler hiyo itafuta user na yenyewe inapoisha muda
+            on_login_script = (
+                f":local voucher $user;\r\n"
+                f":if ([/system scheduler find name=$voucher]=\"\") do={{\r\n"
+                f"  /system scheduler add \\\r\n"
+                f"    name=$voucher \\\r\n"
+                f"    comment=$voucher \\\r\n"
+                f"    interval={limit_uptime} \\\r\n"
+                f"    on-event=\"/ip hotspot active remove [find user=$voucher]\\r\\n"
+                f"/ip hotspot user remove [find name=$voucher]\\r\\n"
+                f"/system scheduler remove [find name=$voucher]\"\r\n"
+                f"}}"
+            )
+
+            # ── Script ya scheduler ya background (backup mechanism) ──────
+            # Hii ni scheduler ya ziada inayokimbia kwa interval kufuta
+            # vouchers ambazo zimefika muda — kama on-login script ilishindwa.
+            on_event = (
+                f":foreach u in=[/ip/hotspot/user find profile={self.mikrotik_profile}] do={{"
+                f":local uname [/ip/hotspot/user get $u name];"
+                f":local uptime [/ip/hotspot/user get $u uptime];"
+                f":if ($uptime >= \"{limit_uptime}\") do={{"
+                f"/ip/hotspot/active remove [find user=$uname];"
+                f"/ip/hotspot/user remove $u;"
+                f":log info (\"Voucher expired: \" . $uname);"
+                f"}}"
+                f"}}"
+            )
 
             for router in routers:
                 try:
@@ -149,58 +211,61 @@ class Package(models.Model):
                         logger.warning(f"Haiwezekani kuunganika {router.name}")
                         continue
 
-                    # ── 1. Sync profile ───────────────────────────────────
-                    existing = api.command(
+                    # ── 1. Sync hotspot profile + On Login script ─────────
+                    existing_profile = api.command(
                         '/ip/hotspot/user/profile/print',
                         queries={'name': self.mikrotik_profile}
                     )
 
-                    if existing:
+                    if existing_profile:
                         api.command('/ip/hotspot/user/profile/set', {
-                            '.id': existing[0]['.id'],
+                            '.id': existing_profile[0]['.id'],
                             'rate-limit': rate_limit,
                             'session-timeout': session_timeout,
                             'shared-users': str(self.shared_users),
+                            'on-login': on_login_script,
                         })
                         logger.info(f"✅ Profile '{self.mikrotik_profile}' updated kwenye {router.name}")
                     else:
-                        api.add_hotspot_profile(
-                            name=self.mikrotik_profile,
-                            rate_limit=rate_limit,
-                            session_timeout=session_timeout,
-                            shared_users=self.shared_users
-                        )
+                        api.command('/ip/hotspot/user/profile/add', {
+                            'name': self.mikrotik_profile,
+                            'rate-limit': rate_limit,
+                            'session-timeout': session_timeout,
+                            'shared-users': str(self.shared_users),
+                            'on-login': on_login_script,
+                        })
                         logger.info(f"✅ Profile '{self.mikrotik_profile}' created kwenye {router.name}")
 
-                    # ── 2. Unda/sasisha script ya voucher expiry ───────────
-                    script_name = f"expire-{self.mikrotik_profile}"
-                    script_source = (
-                        f":foreach u in=[/ip/hotspot/user find profile={self.mikrotik_profile}] do={{"
-                        f":local uptime [/ip/hotspot/user get $u uptime];"
-                        f":if ($uptime >= \"{session_timeout}\") do={{"
-                        f"/ip/hotspot/user remove $u;"
-                        f"}}"
-                        f"}}"
+                    # ── 2. Sync scheduler moja ya package ────────────────
+                    # Scheduler hii inakimbia kwa interval na kufuta vouchers
+                    # zote za profile hii ambazo zimefika muda wao.
+                    existing_sched = api.command(
+                        '/system/scheduler/print',
+                        queries={'name': sched_name}
                     )
 
-                    existing_script = api.command(
-                        '/system/script/print',
-                        queries={'name': script_name}
-                    )
-
-                    if existing_script:
-                        api.command('/system/script/set', {
-                            '.id': existing_script[0]['.id'],
-                            'source': script_source,
+                    if existing_sched:
+                        # Sasisha — interval au script inaweza kubadilika
+                        api.command('/system/scheduler/set', {
+                            '.id': existing_sched[0]['.id'],
+                            'interval': interval,
+                            'on-event': on_event,
+                            'comment': f'Auto-expire vouchers za {self.mikrotik_profile} | {self.name}',
                         })
-                        logger.info(f"✅ Script '{script_name}' updated kwenye {router.name}")
+                        logger.info(f"✅ Scheduler '{sched_name}' updated kwenye {router.name}")
                     else:
-                        api.command('/system/script/add', {
-                            'name': script_name,
-                            'source': script_source,
-                            'comment': f'Auto-expire vouchers za {self.mikrotik_profile}',
+                        # Unda scheduler mpya
+                        api.command('/system/scheduler/add', {
+                            'name': sched_name,
+                            'start-date': 'jan/01/1970',
+                            'start-time': '00:00:00',
+                            'interval': interval,
+                            'on-event': on_event,
+                            'policy': 'read,write,policy,test',
+                            'comment': f'Auto-expire vouchers za {self.mikrotik_profile} | {self.name}',
+                            'disabled': 'false',
                         })
-                        logger.info(f"✅ Script '{script_name}' created kwenye {router.name}")
+                        logger.info(f"✅ Scheduler '{sched_name}' created kwenye {router.name}")
 
                     api.disconnect()
 
@@ -211,7 +276,7 @@ class Package(models.Model):
             logger.error(f"_sync_to_mikrotik error: {e}")
 
     def _delete_from_mikrotik(self, profile_name, client):
-        """Futa profile + script kwenye MikroTik routers zote za client."""
+        """Futa profile + scheduler kwenye MikroTik routers zote za client."""
         try:
             from apps.routers.models import MikroTikRouter
             from apps.routers.mikrotik import get_mikrotik_connection
@@ -219,6 +284,8 @@ class Package(models.Model):
             routers = MikroTikRouter.objects.filter(client=client, is_online=True)
             if not routers.exists():
                 return
+
+            sched_name = f"expire-{profile_name}"
 
             for router in routers:
                 try:
@@ -232,17 +299,17 @@ class Package(models.Model):
                         queries={'name': profile_name}
                     )
                     if existing:
-                        profile_id = existing[0].get('.id')
-                        if profile_id:
-                            api._talk(['/ip/hotspot/user/profile/remove', f'=.id={profile_id}'])
-                            logger.info(f"✅ Profile '{profile_name}' deleted kutoka {router.name}")
+                        api._talk(['/ip/hotspot/user/profile/remove', f'=.id={existing[0][".id"]}'])
+                        logger.info(f"✅ Profile '{profile_name}' deleted kutoka {router.name}")
 
-                    # Futa script pia
-                    script_name = f"expire-{profile_name}"
-                    existing_script = api.command('/system/script/print', queries={'name': script_name})
-                    if existing_script:
-                        api.command('/system/script/remove', {'.id': existing_script[0]['.id']})
-                        logger.info(f"✅ Script '{script_name}' deleted kutoka {router.name}")
+                    # Futa scheduler ya package
+                    existing_sched = api.command(
+                        '/system/scheduler/print',
+                        queries={'name': sched_name}
+                    )
+                    if existing_sched:
+                        api.command('/system/scheduler/remove', {'.id': existing_sched[0]['.id']})
+                        logger.info(f"✅ Scheduler '{sched_name}' deleted kutoka {router.name}")
 
                     api.disconnect()
 
