@@ -56,15 +56,14 @@ class Package(models.Model):
         - Package za siku → scheduler inakimbia kila dakika 5
         """
         if self.duration_unit == 'hours':
-            return '00:01:00'   # Kila dakika moja
+            return '00:01:00'
         elif self.duration_unit == 'days':
-            return '00:05:00'   # Kila dakika tano
+            return '00:05:00'
         return '00:01:00'
 
     def _mikrotik_limit_uptime(self):
         """
-        limit-uptime kwa MikroTik hotspot user — hii ndio inayodhibiti
-        muda wa voucher bila scheduler.
+        limit-uptime kwa MikroTik hotspot user.
         - 1h  → 01:00:00
         - 2h  → 02:00:00
         - 1d  → 1d 00:00:00
@@ -151,9 +150,9 @@ class Package(models.Model):
     def _sync_to_mikrotik(self):
         """
         Unda au sasisha kwenye MikroTik routers zote za client:
-          1. Hotspot user profile (speed + session-timeout + shared-users)
-          2. Scheduler moja ya package — inakimbia kila muda mfupi na
-             kufuta vouchers ZOTE za profile hii ambazo zimefika limit-uptime
+          1. Hotspot user profile (speed + session-timeout + shared-users + on-login script)
+          2. Scheduler moja ya package — backup mechanism inayofuta vouchers
+             zilizofika limit-uptime
         """
         try:
             from apps.routers.models import MikroTikRouter
@@ -170,28 +169,43 @@ class Package(models.Model):
             interval        = self._scheduler_interval()
             sched_name      = f"expire-{self.mikrotik_profile}"
 
-            # ── On Login script — inawekwa kwenye Hotspot User Profile → Scripts ──
-            # Pale mtumiaji anapoingiza voucher (login), MikroTik inatekeleza
-            # script hii moja kwa moja. Inafanya:
-            #   1. Angalia kama scheduler ya voucher hii ipo tayari
-            #   2. Kama haipo — iunda scheduler yenye interval = muda wa package
-            #   3. Scheduler hiyo itafuta user na yenyewe inapoisha muda
+            # ── On Login script ───────────────────────────────────────────────
+            # Inatekelezwa pale mtumiaji YEYOTE (manual au batch) anapoingiza
+            # voucher kwenye hotspot login page.
+            #
+            # MAREKEBISHO MUHIMU:
+            # Awali ilikuwa: :if ([/system scheduler find name=$voucher]="") do={
+            # Tatizo: /system/scheduler/find inarudisha LIST (object), si string.
+            #         Kulinganisha list na "" kunaweza kutofanya kazi vizuri
+            #         kwenye RouterOS versions zote — hasa kwa batch vouchers.
+            #
+            # Sasa: [:len [/system scheduler find name=$voucher]]=0
+            #       Hii inahesabu idadi ya schedulers zilizopata — kama 0 (haipo)
+            #       iunda scheduler mpya. Hii inafanya kazi kwa manual NA batch.
+            # MUHIMU: limit_uptime imewekwa ndani ya quotes ("...").
+            # Kwa packages za saa, thamani yake haina nafasi (e.g. "02:00:00")
+            # — bila quotes ingefanya kazi kwa bahati.
+            # Kwa packages za siku, thamani ina nafasi (e.g. "1d 00:00:00")
+            # — bila quotes, MikroTik inasoma hii kama maneno MAWILI tofauti
+            # (interval=1d na 00:00:00), na command ya /system scheduler add
+            # inashindwa kimya kimya (silent fail) — hivyo scheduler
+            # haiundwi kabisa kwa vouchers za siku.
             on_login_script = (
                 f":local voucher $user;\r\n"
-                f":if ([/system scheduler find name=$voucher]=\"\") do={{\r\n"
+                f":if ([:len [/system scheduler find name=$voucher]]=0) do={{\r\n"
                 f"  /system scheduler add \\\r\n"
                 f"    name=$voucher \\\r\n"
                 f"    comment=$voucher \\\r\n"
-                f"    interval={limit_uptime} \\\r\n"
+                f"    interval=\"{limit_uptime}\" \\\r\n"
                 f"    on-event=\"/ip hotspot active remove [find user=$voucher]\\r\\n"
                 f"/ip hotspot user remove [find name=$voucher]\\r\\n"
                 f"/system scheduler remove [find name=$voucher]\"\r\n"
                 f"}}"
             )
 
-            # ── Script ya scheduler ya background (backup mechanism) ──────
-            # Hii ni scheduler ya ziada inayokimbia kwa interval kufuta
-            # vouchers ambazo zimefika muda — kama on-login script ilishindwa.
+            # ── Script ya scheduler ya background (backup mechanism) ──────────
+            # Inakimbia kila muda mfupi na kufuta vouchers ambazo zimefika
+            # limit-uptime — kama on-login script ilishindwa kwa sababu yoyote.
             on_event = (
                 f":foreach u in=[/ip/hotspot/user find profile={self.mikrotik_profile}] do={{"
                 f":local uname [/ip/hotspot/user get $u name];"
@@ -211,7 +225,7 @@ class Package(models.Model):
                         logger.warning(f"Haiwezekani kuunganika {router.name}")
                         continue
 
-                    # ── 1. Sync hotspot profile + On Login script ─────────
+                    # ── 1. Sync hotspot profile + On Login script ─────────────
                     existing_profile = api.command(
                         '/ip/hotspot/user/profile/print',
                         queries={'name': self.mikrotik_profile}
@@ -236,16 +250,13 @@ class Package(models.Model):
                         })
                         logger.info(f"✅ Profile '{self.mikrotik_profile}' created kwenye {router.name}")
 
-                    # ── 2. Sync scheduler moja ya package ────────────────
-                    # Scheduler hii inakimbia kwa interval na kufuta vouchers
-                    # zote za profile hii ambazo zimefika muda wao.
+                    # ── 2. Sync scheduler ya background ──────────────────────
                     existing_sched = api.command(
                         '/system/scheduler/print',
                         queries={'name': sched_name}
                     )
 
                     if existing_sched:
-                        # Sasisha — interval au script inaweza kubadilika
                         api.command('/system/scheduler/set', {
                             '.id': existing_sched[0]['.id'],
                             'interval': interval,
@@ -254,7 +265,6 @@ class Package(models.Model):
                         })
                         logger.info(f"✅ Scheduler '{sched_name}' updated kwenye {router.name}")
                     else:
-                        # Unda scheduler mpya
                         api.command('/system/scheduler/add', {
                             'name': sched_name,
                             'start-date': 'jan/01/1970',
@@ -302,7 +312,7 @@ class Package(models.Model):
                         api._talk(['/ip/hotspot/user/profile/remove', f'=.id={existing[0][".id"]}'])
                         logger.info(f"✅ Profile '{profile_name}' deleted kutoka {router.name}")
 
-                    # Futa scheduler ya package
+                    # Futa scheduler ya background
                     existing_sched = api.command(
                         '/system/scheduler/print',
                         queries={'name': sched_name}
