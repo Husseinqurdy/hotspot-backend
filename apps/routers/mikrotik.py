@@ -180,7 +180,7 @@ class MikroTikAPI:
         r = self.command('/ip/dns/print')
         return r[0] if r else {}
 
-    # ── HOTSPOT ───────────────────────────────────────────
+    # ── HOTSPOT USERS ─────────────────────────────────────
 
     def get_hotspot_users(self):
         return self.command('/ip/hotspot/user/print')
@@ -191,11 +191,56 @@ class MikroTikAPI:
                 'name': username,
                 'password': password,
                 'profile': profile,
-                'comment': comment
+                'comment': comment,
             })
             return True
         except Exception as e:
             logger.error(f"Add hotspot user failed: {e}")
+            return False
+
+    def edit_hotspot_user(self, params: dict) -> bool:
+        """
+        Hariri hotspot user iliyopo.
+
+        params lazima iwe na 'username' (jina la user).
+        Fields zingine zinazoweza kubadilishwa:
+          password, profile, comment, limit-uptime,
+          limit-bytes-in, limit-bytes-out, limit-bytes-total,
+          mac-address, address, disabled
+
+        Mfano:
+          edit_hotspot_user({
+              'username': 'john',
+              'profile': 'premium',
+              'disabled': 'false',
+          })
+        """
+        try:
+            username = params.pop('username', None)
+            if not username:
+                logger.error("edit_hotspot_user: username inahitajika")
+                return False
+
+            # Tafuta .id ya user kwa jina lake
+            users = self.command('/ip/hotspot/user/print', queries={'name': username})
+            if not users:
+                logger.error(f"edit_hotspot_user: user '{username}' haikupatikana")
+                return False
+
+            user_id = users[0].get('.id')
+            if not user_id:
+                logger.error(f"edit_hotspot_user: .id haikupatikana kwa '{username}'")
+                return False
+
+            # Jenga set params — .id + fields zinazobadilika
+            set_params = {'.id': user_id}
+            set_params.update(params)
+
+            self.command('/ip/hotspot/user/set', set_params)
+            logger.info(f"edit_hotspot_user: '{username}' imesasishwa")
+            return True
+        except Exception as e:
+            logger.error(f"edit_hotspot_user failed: {e}")
             return False
 
     def delete_hotspot_user(self, username):
@@ -208,6 +253,9 @@ class MikroTikAPI:
             logger.error(f"Delete hotspot user failed: {e}")
             return False
 
+    def remove_hotspot_user(self, username):
+        return self.delete_hotspot_user(username)
+
     def get_active_sessions(self):
         return self.command('/ip/hotspot/active/print')
 
@@ -218,6 +266,8 @@ class MikroTikAPI:
         except:
             return False
 
+    # ── HOTSPOT PROFILES ──────────────────────────────────
+
     def get_hotspot_profiles(self):
         return self.command('/ip/hotspot/user/profile/print')
 
@@ -227,15 +277,60 @@ class MikroTikAPI:
                 'name': name,
                 'rate-limit': rate_limit,
                 'session-timeout': session_timeout,
-                'shared-users': str(shared_users)
+                'shared-users': str(shared_users),
             })
             return True
         except Exception as e:
             logger.error(f"Add profile failed: {e}")
             return False
 
-    def remove_hotspot_user(self, username):
-        return self.delete_hotspot_user(username)
+    def edit_hotspot_profile(self, params: dict) -> bool:
+        """
+        Hariri hotspot user profile iliyopo.
+
+        params lazima iwe na 'profile_name' (jina la profile).
+        Fields zingine zinazoweza kubadilishwa:
+          name, rate-limit, session-timeout, idle-timeout,
+          keepalive-timeout, shared-users, dns-name,
+          html-directory, http-cookie-lifetime, status-autorefresh,
+          transparent-proxy, address-pool, mac-cookie-timeout,
+          on-login, on-logout
+
+        Mfano:
+          edit_hotspot_profile({
+              'profile_name': 'default',
+              'rate-limit': '5M/5M',
+              'session-timeout': '2h',
+              'on-login': ':log info "User ameingia"',
+          })
+        """
+        try:
+            profile_name = params.pop('profile_name', None)
+            if not profile_name:
+                logger.error("edit_hotspot_profile: profile_name inahitajika")
+                return False
+
+            # Tafuta .id ya profile kwa jina lake
+            profiles = self.command('/ip/hotspot/user/profile/print', queries={'name': profile_name})
+            if not profiles:
+                logger.error(f"edit_hotspot_profile: profile '{profile_name}' haikupatikana")
+                return False
+
+            profile_id = profiles[0].get('.id')
+            if not profile_id:
+                logger.error(f"edit_hotspot_profile: .id haikupatikana kwa '{profile_name}'")
+                return False
+
+            # Jenga set params — .id + fields zinazobadilika
+            set_params = {'.id': profile_id}
+            set_params.update(params)
+
+            self.command('/ip/hotspot/user/profile/set', set_params)
+            logger.info(f"edit_hotspot_profile: '{profile_name}' imesasishwa")
+            return True
+        except Exception as e:
+            logger.error(f"edit_hotspot_profile failed: {e}")
+            return False
 
     # ── FIREWALL ──────────────────────────────────────────
 
@@ -251,7 +346,7 @@ class MikroTikAPI:
         try:
             return self.command('/interface/monitor-traffic', {
                 'interface': interface_name,
-                'once': ''
+                'once': '',
             })
         except:
             return []
@@ -273,23 +368,19 @@ class MikroTikAPI:
     # ── HOTSPOT SERVERS ───────────────────────────────────
 
     def get_hotspot_servers(self):
-        """IP/Hotspot → Servers"""
         return self.command('/ip/hotspot/print')
 
     # ── HOTSPOT HOSTS ─────────────────────────────────────
 
     def get_hotspot_hosts(self):
-        """IP/Hotspot → Hosts - vifaa vyote vilivyounganika"""
         return self.command('/ip/hotspot/host/print')
 
     # ── IP BINDINGS ───────────────────────────────────────
 
     def get_ip_bindings(self):
-        """IP/Hotspot → IP Bindings"""
         return self.command('/ip/hotspot/ip-binding/print')
 
     def add_ip_binding(self, mac_address, ip_address='', binding_type='regular', comment=''):
-        """Ongeza IP Binding"""
         try:
             params = {
                 'mac-address': mac_address,
@@ -306,7 +397,6 @@ class MikroTikAPI:
             return False
 
     def remove_ip_binding(self, binding_id):
-        """Futa IP Binding"""
         try:
             self.command('/ip/hotspot/ip-binding/remove', {'.id': binding_id})
             return True
@@ -317,11 +407,9 @@ class MikroTikAPI:
     # ── WALLED GARDEN ─────────────────────────────────────
 
     def get_walled_garden(self):
-        """IP/Hotspot → Walled Garden (HTTP)"""
         return self.command('/ip/hotspot/walled-garden/print')
 
     def add_walled_garden(self, dst_host, action='allow', comment=''):
-        """Ongeza Walled Garden entry"""
         try:
             params = {'dst-host': dst_host, 'action': action}
             if comment:
@@ -333,7 +421,6 @@ class MikroTikAPI:
             return False
 
     def remove_walled_garden(self, entry_id):
-        """Futa Walled Garden entry"""
         try:
             self.command('/ip/hotspot/walled-garden/remove', {'.id': entry_id})
             return True
@@ -344,11 +431,9 @@ class MikroTikAPI:
     # ── WALLED GARDEN IP ──────────────────────────────────
 
     def get_walled_garden_ip(self):
-        """IP/Hotspot → Walled Garden IP List (HTTPS/IP)"""
         return self.command('/ip/hotspot/walled-garden/ip/print')
 
     def add_walled_garden_ip(self, dst_address, action='accept', comment=''):
-        """Ongeza Walled Garden IP entry"""
         try:
             params = {'dst-address': dst_address, 'action': action}
             if comment:
@@ -360,7 +445,6 @@ class MikroTikAPI:
             return False
 
     def remove_walled_garden_ip(self, entry_id):
-        """Futa Walled Garden IP entry"""
         try:
             self.command('/ip/hotspot/walled-garden/ip/remove', {'.id': entry_id})
             return True
@@ -371,11 +455,9 @@ class MikroTikAPI:
     # ── COOKIES ───────────────────────────────────────────
 
     def get_hotspot_cookies(self):
-        """IP/Hotspot → Cookies"""
         return self.command('/ip/hotspot/cookie/print')
 
     def remove_hotspot_cookie(self, cookie_id):
-        """Futa cookie moja"""
         try:
             self.command('/ip/hotspot/cookie/remove', {'.id': cookie_id})
             return True
@@ -384,7 +466,6 @@ class MikroTikAPI:
             return False
 
     def clear_all_cookies(self):
-        """Futa cookies zote"""
         try:
             cookies = self.get_hotspot_cookies()
             for c in cookies:
@@ -397,16 +478,9 @@ class MikroTikAPI:
     # ── SCHEDULER ─────────────────────────────────────────
 
     def get_schedulers(self):
-        """System → Scheduler - orodha ya schedulers zote."""
         return self.command('/system/scheduler/print')
 
     def add_scheduler(self, params):
-        """Ongeza scheduler mpya.
-
-        params ni dict inayoweza kuwa na:
-          name, start-date, start-time, interval,
-          on-event, policy, comment, disabled
-        """
         try:
             self.command('/system/scheduler/add', params)
             return True
@@ -415,10 +489,10 @@ class MikroTikAPI:
             return False
 
     def edit_scheduler(self, params):
-        """Hariri scheduler iliyopo.
-
-        params lazima iwe na '.id' ya scheduler inayolengwa.
-        Fields zingine ni za hiari — tuma tu zinazobadilika.
+        """
+        Hariri scheduler iliyopo.
+        params lazima iwe na '.id' ya scheduler.
+        Fields zingine ni za hiari.
         """
         try:
             self.command('/system/scheduler/set', params)
@@ -428,7 +502,6 @@ class MikroTikAPI:
             return False
 
     def remove_scheduler(self, scheduler_id):
-        """Futa scheduler kwa .id yake."""
         try:
             self.command('/system/scheduler/remove', {'.id': scheduler_id})
             return True
