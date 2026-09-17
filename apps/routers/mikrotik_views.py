@@ -22,24 +22,29 @@ def get_router_for_user(router_id, user):
 
 
 class RouterStatusView(APIView):
+    """Hali kamili ya router - kama System → Resources kwenye Winbox."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
         router = get_router_for_user(router_id, request.user)
         if not router:
             return Response({'error': 'Router haikupatikana'}, status=404)
+
         api = get_mikrotik_connection(router)
         if not api:
             router.is_online = False
             router.save(update_fields=['is_online'])
             return Response({'error': 'Router haipo online', 'is_online': False}, status=503)
+
         try:
             resource = api.get_resource()
             routerboard = api.get_routerboard()
             identity = api.get_identity()
+
             router.is_online = True
             router.last_seen = timezone.now()
             router.save(update_fields=['is_online', 'last_seen'])
+
             return Response({
                 'is_online': True,
                 'identity': identity,
@@ -68,6 +73,7 @@ class RouterStatusView(APIView):
 
 
 class RouterInterfacesView(APIView):
+    """Interfaces zote za router."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -87,6 +93,7 @@ class RouterInterfacesView(APIView):
 
 
 class RouterIPAddressesView(APIView):
+    """IP addresses za router."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -107,7 +114,7 @@ class RouterIPAddressesView(APIView):
 
 
 class HotspotUsersView(APIView):
-    """Hotspot users — ona, ongeza, hariri, futa."""
+    """Hotspot users - ona, ongeza, futa."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -126,7 +133,7 @@ class HotspotUsersView(APIView):
             api.disconnect()
 
     def post(self, request, router_id):
-        """Ongeza hotspot user mpya."""
+        """Ongeza hotspot user manually."""
         router = get_router_for_user(router_id, request.user)
         if not router:
             return Response({'error': 'Router haikupatikana'}, status=404)
@@ -136,69 +143,13 @@ class HotspotUsersView(APIView):
         try:
             username = request.data.get('username', '')
             password = request.data.get('password', username)
-            profile  = request.data.get('profile', 'default')
-            comment  = request.data.get('comment', 'Manual')
-            if not username:
-                return Response({'error': 'username inahitajika'}, status=400)
+            profile = request.data.get('profile', 'default')
+            comment = request.data.get('comment', 'Manual')
             success = api.add_hotspot_user(username, password, profile, comment)
             if success:
                 return Response({'message': f'User {username} ameongezwa'})
             return Response({'error': 'Imeshindwa kuongeza user'}, status=400)
         except Exception as e:
-            return Response({'error': str(e)}, status=500)
-        finally:
-            api.disconnect()
-
-    def patch(self, request, router_id):
-        """
-        Hariri hotspot user iliyopo.
-        Frontend inatuma: { username, password, profile, comment,
-                            limit-uptime, limit-bytes-in, limit-bytes-out,
-                            limit-bytes-total, mac-address, address, disabled }
-        """
-        router = get_router_for_user(router_id, request.user)
-        if not router:
-            return Response({'error': 'Router haikupatikana'}, status=404)
-
-        username = request.data.get('username')
-        if not username:
-            return Response({'error': 'username inahitajika'}, status=400)
-
-        api = get_mikrotik_connection(router)
-        if not api:
-            return Response({'error': 'Router haipo online'}, status=503)
-
-        try:
-            # Fields zinazoweza kubadilishwa — zote ni optional
-            # Jina la field katika MikroTik ni sawa na linaloletwa na frontend
-            # isipokuwa 'address' (frontend) = 'address' (MT) — sawa
-            allowed_fields = [
-                'password',
-                'profile',
-                'comment',
-                'limit-uptime',
-                'limit-bytes-in',
-                'limit-bytes-out',
-                'limit-bytes-total',
-                'mac-address',
-                'address',
-                'disabled',
-            ]
-            params = {'username': username}
-            for field in allowed_fields:
-                if field in request.data:
-                    params[field] = request.data[field]
-
-            if len(params) == 1:
-                # Hakuna kitu kingine zaidi ya username
-                return Response({'error': 'Hakuna fields za kusasisha'}, status=400)
-
-            success = api.edit_hotspot_user(params)
-            if success:
-                return Response({'message': f'User {username} imesasishwa'})
-            return Response({'error': 'Imeshindwa kusasisha user'}, status=400)
-        except Exception as e:
-            logger.error(f"Patch hotspot user error: {e}")
             return Response({'error': str(e)}, status=500)
         finally:
             api.disconnect()
@@ -227,8 +178,8 @@ class HotspotUserDeleteView(APIView):
         finally:
             api.disconnect()
 
-
 class HotspotActiveSessionsView(APIView):
+    """Active sessions - watumiaji waliounganishwa sasa."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -247,6 +198,7 @@ class HotspotActiveSessionsView(APIView):
             api.disconnect()
 
     def delete(self, request, router_id):
+        """Disconnect session."""
         router = get_router_for_user(router_id, request.user)
         if not router:
             return Response({'error': 'Router haikupatikana'}, status=404)
@@ -266,11 +218,7 @@ class HotspotActiveSessionsView(APIView):
 
 
 class HotspotProfilesView(APIView):
-    """
-    Hotspot profiles — ona na hariri.
-    GET  → orodha ya profiles zote
-    PATCH → sasisha profile iliyopo
-    """
+    """Hotspot profiles."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -288,66 +236,9 @@ class HotspotProfilesView(APIView):
         finally:
             api.disconnect()
 
-    def patch(self, request, router_id):
-        """
-        Hariri hotspot profile iliyopo.
-        Frontend inatuma: { profile_name, name, rate-limit, session-timeout,
-                            idle-timeout, keepalive-timeout, shared-users,
-                            dns-name, html-directory, http-cookie-lifetime,
-                            status-autorefresh, address-pool, mac-cookie-timeout,
-                            on-login, on-logout }
-        """
-        router = get_router_for_user(router_id, request.user)
-        if not router:
-            return Response({'error': 'Router haikupatikana'}, status=404)
-
-        profile_name = request.data.get('profile_name')
-        if not profile_name:
-            return Response({'error': 'profile_name inahitajika'}, status=400)
-
-        api = get_mikrotik_connection(router)
-        if not api:
-            return Response({'error': 'Router haipo online'}, status=503)
-
-        try:
-            # Fields zote zinazoweza kubadilishwa kwa hotspot profile
-            allowed_fields = [
-                'name',
-                'rate-limit',
-                'session-timeout',
-                'idle-timeout',
-                'keepalive-timeout',
-                'shared-users',
-                'dns-name',
-                'html-directory',
-                'http-cookie-lifetime',
-                'status-autorefresh',
-                'transparent-proxy',
-                'address-pool',
-                'mac-cookie-timeout',
-                'on-login',
-                'on-logout',
-            ]
-            params = {'profile_name': profile_name}
-            for field in allowed_fields:
-                if field in request.data:
-                    params[field] = request.data[field]
-
-            if len(params) == 1:
-                return Response({'error': 'Hakuna fields za kusasisha'}, status=400)
-
-            success = api.edit_hotspot_profile(params)
-            if success:
-                return Response({'message': f'Profile "{profile_name}" imesasishwa'})
-            return Response({'error': 'Imeshindwa kusasisha profile'}, status=400)
-        except Exception as e:
-            logger.error(f"Patch hotspot profile error: {e}")
-            return Response({'error': str(e)}, status=500)
-        finally:
-            api.disconnect()
-
 
 class RouterRestartView(APIView):
+    """Restart router remotely."""
     permission_classes = [IsAuthenticated]
 
     def post(self, request, router_id):
@@ -372,6 +263,7 @@ class RouterRestartView(APIView):
 
 
 class BandwidthView(APIView):
+    """Bandwidth monitoring."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -384,7 +276,7 @@ class BandwidthView(APIView):
         try:
             interfaces = api.get_interfaces()
             traffic_data = []
-            for iface in interfaces[:5]:
+            for iface in interfaces[:5]:  # Top 5 interfaces
                 name = iface.get('name', '')
                 if name:
                     traffic = api.get_interface_traffic(name)
@@ -404,6 +296,7 @@ class BandwidthView(APIView):
 
 
 class RouterFirewallView(APIView):
+    """Firewall rules."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -424,6 +317,7 @@ class RouterFirewallView(APIView):
 
 
 class RouterLogsView(APIView):
+    """System logs."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -443,6 +337,7 @@ class RouterLogsView(APIView):
 
 
 class RouterDNSView(APIView):
+    """DNS settings."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -462,6 +357,7 @@ class RouterDNSView(APIView):
 
 
 class HotspotServersView(APIView):
+    """IP/Hotspot → Servers - seva zote za hotspot."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -481,6 +377,7 @@ class HotspotServersView(APIView):
 
 
 class HotspotHostsView(APIView):
+    """IP/Hotspot → Hosts - vifaa vyote vilivyounganika."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -500,6 +397,7 @@ class HotspotHostsView(APIView):
 
 
 class IPBindingsView(APIView):
+    """IP/Hotspot → IP Bindings."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -518,6 +416,7 @@ class IPBindingsView(APIView):
             api.disconnect()
 
     def post(self, request, router_id):
+        """Ongeza IP Binding."""
         router = get_router_for_user(router_id, request.user)
         if not router:
             return Response({'error': 'Router haikupatikana'}, status=404)
@@ -525,15 +424,15 @@ class IPBindingsView(APIView):
         if not api:
             return Response({'error': 'Router haipo online'}, status=503)
         try:
-            mac    = request.data.get('mac_address', '')
-            ip     = request.data.get('ip_address', '')
-            btype  = request.data.get('type', 'regular')
+            mac = request.data.get('mac_address', '')
+            ip = request.data.get('ip_address', '')
+            btype = request.data.get('type', 'regular')
             comment = request.data.get('comment', '')
             if not mac:
                 return Response({'error': 'mac_address inahitajika'}, status=400)
             success = api.add_ip_binding(mac, ip, btype, comment)
             if success:
-                return Response({'message': 'IP Binding imeongezwa'})
+                return Response({'message': f'IP Binding imeongezwa'})
             return Response({'error': 'Imeshindwa kuongeza binding'}, status=400)
         except Exception as e:
             return Response({'error': str(e)}, status=500)
@@ -541,6 +440,7 @@ class IPBindingsView(APIView):
             api.disconnect()
 
     def delete(self, request, router_id):
+        """Futa IP Binding."""
         router = get_router_for_user(router_id, request.user)
         if not router:
             return Response({'error': 'Router haikupatikana'}, status=404)
@@ -560,6 +460,7 @@ class IPBindingsView(APIView):
 
 
 class WalledGardenView(APIView):
+    """IP/Hotspot → Walled Garden (HTTP)."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -578,6 +479,7 @@ class WalledGardenView(APIView):
             api.disconnect()
 
     def post(self, request, router_id):
+        """Ongeza Walled Garden entry."""
         router = get_router_for_user(router_id, request.user)
         if not router:
             return Response({'error': 'Router haikupatikana'}, status=404)
@@ -586,8 +488,8 @@ class WalledGardenView(APIView):
             return Response({'error': 'Router haipo online'}, status=503)
         try:
             dst_host = request.data.get('dst_host', '')
-            action   = request.data.get('action', 'allow')
-            comment  = request.data.get('comment', '')
+            action = request.data.get('action', 'allow')
+            comment = request.data.get('comment', '')
             if not dst_host:
                 return Response({'error': 'dst_host inahitajika'}, status=400)
             success = api.add_walled_garden(dst_host, action, comment)
@@ -600,6 +502,7 @@ class WalledGardenView(APIView):
             api.disconnect()
 
     def delete(self, request, router_id):
+        """Futa Walled Garden entry."""
         router = get_router_for_user(router_id, request.user)
         if not router:
             return Response({'error': 'Router haikupatikana'}, status=404)
@@ -619,6 +522,7 @@ class WalledGardenView(APIView):
 
 
 class WalledGardenIPView(APIView):
+    """IP/Hotspot → Walled Garden IP List."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -637,6 +541,7 @@ class WalledGardenIPView(APIView):
             api.disconnect()
 
     def post(self, request, router_id):
+        """Ongeza Walled Garden IP entry."""
         router = get_router_for_user(router_id, request.user)
         if not router:
             return Response({'error': 'Router haikupatikana'}, status=404)
@@ -645,8 +550,8 @@ class WalledGardenIPView(APIView):
             return Response({'error': 'Router haipo online'}, status=503)
         try:
             dst_address = request.data.get('dst_address', '')
-            action      = request.data.get('action', 'accept')
-            comment     = request.data.get('comment', '')
+            action = request.data.get('action', 'accept')
+            comment = request.data.get('comment', '')
             if not dst_address:
                 return Response({'error': 'dst_address inahitajika'}, status=400)
             success = api.add_walled_garden_ip(dst_address, action, comment)
@@ -659,6 +564,7 @@ class WalledGardenIPView(APIView):
             api.disconnect()
 
     def delete(self, request, router_id):
+        """Futa Walled Garden IP entry."""
         router = get_router_for_user(router_id, request.user)
         if not router:
             return Response({'error': 'Router haikupatikana'}, status=404)
@@ -678,6 +584,7 @@ class WalledGardenIPView(APIView):
 
 
 class HotspotCookiesView(APIView):
+    """IP/Hotspot → Cookies."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, router_id):
@@ -696,6 +603,7 @@ class HotspotCookiesView(APIView):
             api.disconnect()
 
     def delete(self, request, router_id):
+        """Futa cookie moja au zote."""
         router = get_router_for_user(router_id, request.user)
         if not router:
             return Response({'error': 'Router haikupatikana'}, status=404)
@@ -708,133 +616,9 @@ class HotspotCookiesView(APIView):
                 success = api.remove_hotspot_cookie(cookie_id)
                 return Response({'message': 'Cookie imefutwa' if success else 'Imeshindwa'})
             else:
+                # Futa zote
                 success = api.clear_all_cookies()
                 return Response({'message': 'Cookies zote zimefutwa' if success else 'Imeshindwa'})
-        except Exception as e:
-            return Response({'error': str(e)}, status=500)
-        finally:
-            api.disconnect()
-
-
-class SchedulerView(APIView):
-    """System → Scheduler."""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, router_id):
-        router = get_router_for_user(router_id, request.user)
-        if not router:
-            return Response({'error': 'Router haikupatikana'}, status=404)
-        api = get_mikrotik_connection(router)
-        if not api:
-            return Response({'error': 'Router haipo online'}, status=503)
-        try:
-            schedulers = api.get_schedulers()
-            return Response({'schedulers': schedulers, 'count': len(schedulers)})
-        except Exception as e:
-            return Response({'error': str(e)}, status=500)
-        finally:
-            api.disconnect()
-
-    def post(self, request, router_id):
-        router = get_router_for_user(router_id, request.user)
-        if not router:
-            return Response({'error': 'Router haikupatikana'}, status=404)
-        api = get_mikrotik_connection(router)
-        if not api:
-            return Response({'error': 'Router haipo online'}, status=503)
-        try:
-            name     = request.data.get('name', '')
-            on_event = request.data.get('on_event', '')
-            if not name:
-                return Response({'error': 'name inahitajika'}, status=400)
-            if not on_event:
-                return Response({'error': 'on_event (script) inahitajika'}, status=400)
-            params = {
-                'name':       name,
-                'start-date': request.data.get('start_date', 'jan/01/1970'),
-                'start-time': request.data.get('start_time', '00:00:00'),
-                'interval':   request.data.get('interval', '00:00:00'),
-                'on-event':   on_event,
-                'policy':     request.data.get('policy', 'read,write,reboot'),
-                'comment':    request.data.get('comment', ''),
-                'disabled':   request.data.get('disabled', 'false'),
-            }
-            success = api.add_scheduler(params)
-            if success:
-                return Response({'message': f'Scheduler "{name}" imeongezwa'})
-            return Response({'error': 'Imeshindwa kuongeza scheduler'}, status=400)
-        except Exception as e:
-            return Response({'error': str(e)}, status=500)
-        finally:
-            api.disconnect()
-
-    def patch(self, request, router_id):
-        """
-        Hariri scheduler iliyopo (pia enable/disable).
-        Frontend inatuma fields mbili njia:
-          - Kutoka detail modal (edit): scheduler fields zina hyphen e.g. 'on-event', 'start-date'
-          - Kutoka toggle button: { scheduler_id, disabled }
-        Tunashughulikia njia zote mbili.
-        """
-        router = get_router_for_user(router_id, request.user)
-        if not router:
-            return Response({'error': 'Router haikupatikana'}, status=404)
-
-        scheduler_id = request.data.get('scheduler_id')
-        if not scheduler_id:
-            return Response({'error': 'scheduler_id inahitajika'}, status=400)
-
-        api = get_mikrotik_connection(router)
-        if not api:
-            return Response({'error': 'Router haipo online'}, status=503)
-
-        try:
-            params = {'id': scheduler_id}
-
-            # Map: frontend key → MikroTik key
-            # Tunakubali njia ZOTE: underscore (kutoka Add form) na hyphen (kutoka detail modal)
-            field_map = {
-                # underscore style (Add/Edit form)
-                'name':       'name',
-                'start_date': 'start-date',
-                'start_time': 'start-time',
-                'interval':   'interval',
-                'on_event':   'on-event',
-                'policy':     'policy',
-                'comment':    'comment',
-                'disabled':   'disabled',
-                # hyphen style (detail modal direct fields)
-                'start-date': 'start-date',
-                'start-time': 'start-time',
-                'on-event':   'on-event',
-            }
-            for key, mt_key in field_map.items():
-                if key in request.data:
-                    params[mt_key] = request.data[key]
-
-            success = api.edit_scheduler(params)
-            if success:
-                return Response({'message': 'Scheduler imesasishwa'})
-            return Response({'error': 'Imeshindwa kusasisha scheduler'}, status=400)
-        except Exception as e:
-            logger.error(f"Patch scheduler error: {e}")
-            return Response({'error': str(e)}, status=500)
-        finally:
-            api.disconnect()
-
-    def delete(self, request, router_id):
-        router = get_router_for_user(router_id, request.user)
-        if not router:
-            return Response({'error': 'Router haikupatikana'}, status=404)
-        scheduler_id = request.data.get('scheduler_id')
-        if not scheduler_id:
-            return Response({'error': 'scheduler_id inahitajika'}, status=400)
-        api = get_mikrotik_connection(router)
-        if not api:
-            return Response({'error': 'Router haipo online'}, status=503)
-        try:
-            success = api.remove_scheduler(scheduler_id)
-            return Response({'message': 'Scheduler imefutwa' if success else 'Imeshindwa'})
         except Exception as e:
             return Response({'error': str(e)}, status=500)
         finally:
