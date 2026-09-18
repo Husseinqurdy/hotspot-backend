@@ -27,12 +27,18 @@ class PendingJobsView(APIView):
         MikroTikJob.objects.filter(id__in=job_ids).update(status=MikroTikJob.STATUS_PROCESSING)
         jobs_data = []
         for job in jobs:
-            from apps.vouchers.models import Voucher
-            for _ in range(10):
-                code = generate_voucher_code()
-                if not Voucher.objects.filter(code=code).exists(): break
-            job.voucher_code = code
-            job.save(update_fields=['voucher_code'])
+            # Heshimu voucher_code iliyowekwa tayari na process_payment_sms —
+            # client mwenye routers kadhaa anapata jobs kadhaa (moja kwa kila
+            # router) zenye code MOJA ya pamoja. Kuizalisha upya hapa
+            # kungevunja mfumo huo (kila router ingepata code tofauti).
+            code = job.voucher_code
+            if not code:
+                from apps.vouchers.models import Voucher
+                for _ in range(10):
+                    code = generate_voucher_code()
+                    if not Voucher.objects.filter(code=code).exists(): break
+                job.voucher_code = code
+                job.save(update_fields=['voucher_code'])
             jobs_data.append({'job_id':job.id,'action':job.action,'voucher_code':code,'profile':job.package.mikrotik_profile,'duration':f"{job.package.duration_minutes}m",'comment':f"NetSafi|{job.customer_phone}|TZS{job.payment.amount:.0f}"})
         logger.info(f"Router {router_id}: Jobs {len(jobs_data)} zimetumwa")
         return Response({'jobs':jobs_data})
@@ -47,23 +53,61 @@ class CompleteJobView(APIView):
         success = request.data.get('success', False)
         error_msg = request.data.get('error','')
         try:
-            job = MikroTikJob.objects.select_related('payment','package','client').get(id=job_id)
+            job = MikroTikJob.objects.select_related('payment','package','client','router').get(id=job_id)
         except MikroTikJob.DoesNotExist:
             return Response({'error':'Job haikupatikana'}, status=404)
         if success:
-            from apps.vouchers.models import Voucher
+            from apps.vouchers.models import Voucher, VoucherRouterPresence
             from apps.payments.models import Payment
-            Voucher.objects.create(client=job.client, router=job.router, package=job.package, payment=job.payment, code=job.voucher_code, customer_phone=job.customer_phone, status='active')
-            job.payment.status = Payment.STATUS_COMPLETED
-            job.payment.save(update_fields=['status'])
-            job.client.balance += job.payment.client_share
-            job.client.save(update_fields=['balance'])
+
+            # get_or_create: job ya KWANZA kwa code hii ndiyo inayounda
+            # Voucher; routers zingine (jobs za malipo yale yale) zinapata
+            # Voucher ile ile bila kujaribu kuiunda upya — kwa vile
+            # Voucher.code ina unique=True, kuunda mara mbili kwa code
+            # moja kungesababisha IntegrityError.
+            voucher, voucher_created = Voucher.objects.get_or_create(
+                code=job.voucher_code,
+                defaults={
+                    'client': job.client,
+                    'router': job.router,
+                    'package': job.package,
+                    'payment': job.payment,
+                    'customer_phone': job.customer_phone,
+                    'status': 'active',
+                }
+            )
+
+            # Presence ya voucher hii kwenye ROUTER HII mahususi.
+            VoucherRouterPresence.objects.get_or_create(
+                voucher=voucher,
+                router=job.router,
+                defaults={'status': VoucherRouterPresence.STATUS_ACTIVE},
+            )
+
+            if job.payment and job.payment.status != Payment.STATUS_COMPLETED:
+                job.payment.status = Payment.STATUS_COMPLETED
+                job.payment.save(update_fields=['status'])
+
+            # MUHIMU: balance ya client TAYARI imeongezwa mara MOJA
+            # wakati Payment ilipoundwa (apps.sms.tasks.process_payment_sms).
+            # Kuongeza tena hapa (kama ilivyokuwa awali) kungesababisha
+            # client kupata balance mara kadhaa kwa malipo MOJA — hasa
+            # sasa kwamba client mwenye routers kadhaa anapata jobs
+            # kadhaa kwa malipo yale yale. Kwa hiyo SIYO tunaiongeza hapa.
+
             job.status = MikroTikJob.STATUS_COMPLETED
             job.completed_at = timezone.now()
             job.save(update_fields=['status','completed_at'])
-            from apps.sms.tasks import queue_voucher_sms
-            queue_voucher_sms.delay(phone=job.customer_phone, code=job.voucher_code, package_name=job.package.name, duration=job.package.duration_display(), speed=f"{job.package.speed_down}Mbps", payment_id=job.payment.id)
-            logger.info(f"✅ Job {job_id}: Voucher {job.voucher_code} → {job.customer_phone}")
+
+            # Tuma SMS ya voucher MARA MOJA TU — job ya kwanza
+            # iliyounda Voucher (voucher_created=True). Zinazofuata
+            # (routers zingine za malipo yale yale) hazitumi SMS
+            # nyingine ili mteja asipokee ujumbe unaofanana mara kadhaa.
+            if voucher_created:
+                from apps.sms.tasks import queue_voucher_sms
+                queue_voucher_sms.delay(phone=job.customer_phone, code=job.voucher_code, package_name=job.package.name, duration=job.package.duration_display(), speed=f"{job.package.speed_down}Mbps", payment_id=job.payment.id if job.payment else None)
+
+            logger.info(f"✅ Job {job_id}: Voucher {job.voucher_code} → {job.customer_phone} (mpya: {voucher_created})")
             return Response({'status':'completed','voucher':job.voucher_code})
         else:
             job.retries += 1
@@ -73,4 +117,9 @@ class CompleteJobView(APIView):
             else:
                 job.status = MikroTikJob.STATUS_PENDING
             job.save(update_fields=['status','retries','error_message'])
+<<<<<<< HEAD
             return Response({'status':'failed','retry':job.retries<3})
+
+=======
+            return Response({'status':'failed','retry':job.retries<3})
+>>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

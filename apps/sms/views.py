@@ -1,11 +1,10 @@
 import re, hashlib, logging
-from django.conf import settings
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-
 logger = logging.getLogger('netsafi')
+
 
 def detect_network(phone):
     phone = phone.strip()
@@ -18,53 +17,120 @@ def detect_network(phone):
     elif prefix in ['062']: return 'halo'
     return 'unknown'
 
+
+def _authenticate_device(request):
+    """
+    MPYA: badala ya kulinganisha na settings.DEVICE_API_KEY (key MOJA
+    ya pamoja kwa devices ZOTE), sasa kila request lazima ilete
+    device_id + api_key inayolingana na GSMDevice husika.
+    """
+    from apps.devices.models import GSMDevice
+
+    device_id = request.data.get('device_id', '').strip()
+    api_key = request.headers.get('X-API-Key', '') or request.data.get('secret', '')
+
+    if not device_id or not api_key:
+        return None, Response({'error': 'device_id na api_key zinahitajika'}, status=401)
+
+    try:
+        device = GSMDevice.objects.select_related('client').prefetch_related('shared_with').get(
+            device_id=device_id, api_key=api_key, is_active=True
+        )
+    except GSMDevice.DoesNotExist:
+        logger.warning(f"Auth imeshindwa kwa device_id={device_id}")
+        return None, Response({'error': 'Unauthorized'}, status=401)
+
+    return device, None
+
+
 class ReceiveSMSView(APIView):
     permission_classes = [AllowAny]
+
     def post(self, request):
-        if request.headers.get('X-API-Key','') != settings.DEVICE_API_KEY:
-            return Response({'error':'Unauthorized'}, status=401)
-        phone = request.data.get('phone','').strip()
-        message = request.data.get('message','').strip()
-        device_id = request.data.get('device_id','').strip()
-        network_hint = request.data.get('network','').strip()
+        device, error = _authenticate_device(request)
+        if error:
+            return error
+
+        phone = request.data.get('phone', '').strip()
+        message = request.data.get('message', '').strip()
+        network_hint = request.data.get('network', '').strip()
+
         if not phone or not message:
-            return Response({'error':'phone na message zinahitajika'}, status=400)
-        if device_id:
-            try:
-                from apps.devices.models import GSMDevice
-                d = GSMDevice.objects.get(device_id=device_id, is_active=True)
-                d.last_seen = timezone.now(); d.save(update_fields=['last_seen'])
-            except: pass
+            return Response({'error': 'phone na message zinahitajika'}, status=400)
+
+        device.last_seen = timezone.now()
+        device.save(update_fields=['last_seen'])
+
         network = network_hint if network_hint else detect_network(phone)
+
         from apps.sms.tasks import process_payment_sms
-        process_payment_sms.delay(phone=phone, sms_text=message, network=network, device_id=device_id)
+<<<<<<< HEAD
+        process_payment_sms.apply(kwargs={
+            'phone': phone,
+            'sms_text': message,
+            'network': network,
+            'device_id': device.device_id,
+        })
+        return Response({'status': 'received', 'network': network})
+
+=======
+        process_payment_sms.apply(kwargs={'phone': phone, 'sms_text': message, 'network': network, 'device_id': device_id})
         return Response({'status':'received','network':network})
+>>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 
 class OutgoingSMSView(APIView):
     permission_classes = [AllowAny]
+
     def get(self, request):
-        if request.GET.get('secret','') != settings.DEVICE_API_KEY:
-            return Response({'error':'Unauthorized'}, status=401)
+        device, error = _authenticate_device(request)
+        if error:
+            return error
+
         from .models import OutgoingSMS
-        sms_list = OutgoingSMS.objects.filter(status='queued').order_by('-priority','created_at')[:10]
-        if not sms_list: return Response({'messages':[]})
+        # MPYA: kifaa kinapata ujumbe wa client YEYOTE aliye kwenye
+        # eligible_clients yake — kwa kifaa cha kawaida hii ni client
+        # mmoja tu (mmiliki); kwa kifaa kinachoshirikiwa, ni mmiliki +
+        # walioongezwa kwenye shared_with.
+        eligible_client_ids = [c.id for c in device.eligible_clients()]
+        sms_list = OutgoingSMS.objects.filter(
+            status='queued', client_id__in=eligible_client_ids
+        ).order_by('-priority', 'created_at')[:10]
+
+        if not sms_list:
+            return Response({'messages': []})
+
         ids = [s.id for s in sms_list]
         OutgoingSMS.objects.filter(id__in=ids).update(status='taken')
-        return Response({'messages':[{'id':s.id,'phone':s.phone,'message':s.message} for s in sms_list]})
+        return Response({'messages': [{'id': s.id, 'phone': s.phone, 'message': s.message} for s in sms_list]})
+
 
 class SMSSentView(APIView):
     permission_classes = [AllowAny]
+
     def post(self, request):
-        if request.data.get('secret','') != settings.DEVICE_API_KEY:
-            return Response({'error':'Unauthorized'}, status=401)
+        device, error = _authenticate_device(request)
+        if error:
+            return error
+
         from .models import OutgoingSMS
-        for result in request.data.get('results',[]):
+        eligible_client_ids = [c.id for c in device.eligible_clients()]
+        for result in request.data.get('results', []):
             try:
-                sms = OutgoingSMS.objects.get(id=result['id'])
-                if result.get('success'): sms.status='sent'; sms.sent_at=timezone.now()
+                # MUHIMU: hakikisha SMS hii ilitoka kwa client mmoja
+                # kati ya eligible_clients za kifaa hiki hiki.
+                sms = OutgoingSMS.objects.get(id=result['id'], client_id__in=eligible_client_ids)
+                if result.get('success'):
+                    sms.status = 'sent'
+                    sms.sent_at = timezone.now()
                 else:
                     sms.retries += 1
                     sms.status = 'failed' if sms.retries >= 3 else 'queued'
                 sms.save()
+<<<<<<< HEAD
+            except OutgoingSMS.DoesNotExist:
+                pass
+        return Response({'status': 'ok'})
+=======
             except: pass
         return Response({'status':'ok'})
+>>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

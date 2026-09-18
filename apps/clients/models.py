@@ -11,6 +11,25 @@ def generate_identifier():
         return 1
 
 
+# Features zote za MikroTik Manager
+MIKROTIK_FEATURES = [
+    'servers',
+    'server_profiles',
+    'users',
+    'active',
+    'hosts',
+    'ip_bindings',
+    'walled_garden',
+    'walled_garden_ip',
+    'cookies',
+    'scheduler',
+<<<<<<< HEAD
+    'terminal',
+=======
+>>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
+]
+
+
 class Client(models.Model):
     user = models.OneToOneField(
         User,
@@ -37,6 +56,19 @@ class Client(models.Model):
         default=10.00
     )
     is_active = models.BooleanField(default=True)
+
+    # Permissions za MikroTik — list ya features zilizoruhusiwa
+<<<<<<< HEAD
+=======
+    # Kama field iko tupu (None au []), client hawezi kuona chochote
+    # Kama ina ['servers', 'users', ...], anaona hizo tu
+>>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
+    mikrotik_permissions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Features za MikroTik ambazo client amepewa ruhusa"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -45,6 +77,38 @@ class Client(models.Model):
             self.identifier = generate_identifier()
         super().save(*args, **kwargs)
 
+    def has_mikrotik_permission(self, feature: str) -> bool:
+        """Angalia kama client ana ruhusa ya feature fulani."""
+        return feature in (self.mikrotik_permissions or [])
+
+<<<<<<< HEAD
+    def requires_payment_identifier(self) -> bool:
+        """
+        True ikiwa client huyu anashirikiana kifaa cha GSM (lipa
+        namba) na client mwingine yeyote — iwe kama MMILIKI mwenye
+        shared_with isiyo tupu, au kama MSHIRIKI aliyeongezwa kwenye
+        shared_with ya kifaa cha mtu mwingine.
+
+        Ikiwa False (hana sharing yoyote), packages zake HAZIHITAJI
+        tena +identifier trick — device_id peke yake tayari
+        inamtambulisha kikamilifu, hivyo customer analipa bei kamili
+        ya package bila kuongeza chochote (angalia
+        apps/packages/models.py::Package._compute_unique_amount()).
+
+        Import ya GSMDevice iko ndani ya method (siyo juu ya faili)
+        kwa MAKUSUDI — apps.devices.models tayari inaingiza
+        apps.clients.models (Client ni FK huko), kwa hiyo import ya
+        juu ingesababisha circular import.
+        """
+        from apps.devices.models import GSMDevice
+        owns_shared_device = GSMDevice.objects.filter(
+            client=self, shared_with__isnull=False
+        ).exists()
+        is_shared_into = GSMDevice.objects.filter(shared_with=self).exists()
+        return owns_shared_device or is_shared_into
+
+=======
+>>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
     class Meta:
         ordering = ['-created_at']
 

@@ -11,6 +11,7 @@ class MikroTikRouter(models.Model):
     hotspot_interface = models.CharField(max_length=50, default='bridge')
     is_online = models.BooleanField(default=False)
     last_seen = models.DateTimeField(null=True, blank=True)
+    offline_alerted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     class Meta: ordering = ['-created_at']

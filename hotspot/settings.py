@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'django_celery_beat',
     'apps.accounts',
@@ -32,6 +33,8 @@ INSTALLED_APPS = [
     'apps.vouchers',
     'apps.sms',
     'apps.devices',
+    'apps.notifications',
+    'apps.ads',
 ]
 
 MIDDLEWARE = [
@@ -86,13 +89,18 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=8),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
+    'REFRESH_TOKEN_LIFETIME': timedelta(minutes=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
 }
+
+CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOWED_ORIGINS = os.environ.get(
     'CORS_ALLOWED_ORIGINS',
-    
+
 ).split(',')
 
 CORS_ALLOW_HEADERS = [
@@ -114,6 +122,14 @@ DEVICE_API_KEY = os.environ.get('DEVICE_API_KEY', 'change-this-device-secret-key
 # MikroTik Cloud
 MIKROTIK_CONNECT_TIMEOUT = int(os.environ.get('MIKROTIK_CONNECT_TIMEOUT', '10'))
 
+# Africa's Talking — njia ya PILI, huru, ya kutuma SMS (one-way, moja kwa
+# moja kupitia API). Hii ni TOFAUTI kabisa na mfumo wa GSM (OutgoingSMS
+# queue kwenye apps/sms/) na haiubadilishi wala kuuathiri kwa namna yoyote.
+# Tumika kwenye apps/sms/at_service.py (send_at_sms).
+AT_USERNAME = os.environ.get('AT_USERNAME', '')
+AT_API_KEY = os.environ.get('AT_API_KEY', '')
+AT_SENDER_ID = os.environ.get('AT_SENDER_ID', '')  # hiari — acha tupu kama huna Sender ID iliyosajiliwa
+
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
@@ -125,6 +141,8 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Africa/Dar_es_Salaam'
 USE_I18N = True
 USE_TZ = True
+CELERY_TIMEZONE = 'Africa/Dar_es_Salaam'
+CELERY_ENABLE_UTC = False
 
 LOGGING = {
     'version': 1,
@@ -137,7 +155,11 @@ LOGGING = {
     },
     'loggers': {
         'hotspot': {'handlers': ['console'], 'level': 'INFO', 'propagate': True},
+        # Msimbo mwingi wa apps (vouchers, payments, sms, n.k) unatumia
+        # logging.getLogger('netsafi') — logger hii ilikuwa haijasajiliwa
+        # hapa, kwa hiyo baadhi ya logs (mfano matokeo ya send_at_sms,
+        # ripoti za mauzo za kila siku) hazikuwa zikionekana kwenye console.
+        'netsafi': {'handlers': ['console'], 'level': 'INFO', 'propagate': True},
     },
 }
-
 

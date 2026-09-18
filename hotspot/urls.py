@@ -1,13 +1,18 @@
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
-from apps.accounts.views import LoginView, SuperAdminDashboardView, ClientDashboardView
+from apps.accounts.views import LoginView, SuperAdminDashboardView, ClientDashboardView, MeView, ChangeOwnPasswordView
 from apps.routers.job_views import PendingJobsView, CompleteJobView
+from apps.vouchers.views import VoucherScheduleView
 from apps.routers.mikrotik_views import (
     HotspotCookiesView, HotspotHostsView, HotspotServersView, IPBindingsView, RouterStatusView, RouterInterfacesView, RouterIPAddressesView,
     HotspotUsersView, HotspotActiveSessionsView, HotspotUserDeleteView,
     RouterRestartView, BandwidthView, RouterFirewallView,
-    HotspotProfilesView, RouterLogsView, RouterDNSView, WalledGardenIPView, WalledGardenView,
+<<<<<<< HEAD
+    HotspotProfilesView, RouterLogsView, RouterDNSView, SchedulerView, WalledGardenIPView, WalledGardenView,MikroTikTerminalView,
+=======
+    HotspotProfilesView, RouterLogsView, RouterDNSView, SchedulerView, WalledGardenIPView, WalledGardenView,
+>>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 )
 
 urlpatterns = [
@@ -16,6 +21,8 @@ urlpatterns = [
     # Auth
     path('api/auth/login/', LoginView.as_view()),
     path('api/auth/refresh/', TokenRefreshView.as_view()),
+    path('api/auth/me/', MeView.as_view()),
+    path('api/auth/change-password/', ChangeOwnPasswordView.as_view()),
 
     # Dashboards
     path('api/dashboard/superadmin/', SuperAdminDashboardView.as_view()),
@@ -29,7 +36,8 @@ urlpatterns = [
     path('api/vouchers/', include('apps.vouchers.urls')),
     path('api/devices/', include('apps.devices.urls')),
     path('api/sms/', include('apps.sms.urls')),
-
+    path('api/notifications/', include('apps.notifications.urls')),
+    path('api/ads/', include('apps.ads.urls')),
     # MikroTik Job Polling (VPN)
     path('api/jobs/pending/', PendingJobsView.as_view()),
     path('api/jobs/complete/', CompleteJobView.as_view()),
@@ -53,4 +61,17 @@ urlpatterns = [
     path('api/mikrotik/<int:router_id>/hotspot/walled-garden/', WalledGardenView.as_view()),
     path('api/mikrotik/<int:router_id>/hotspot/walled-garden-ip/', WalledGardenIPView.as_view()),
     path('api/mikrotik/<int:router_id>/hotspot/cookies/', HotspotCookiesView.as_view()),
+    path('api/mikrotik/<int:router_id>/voucher/schedule/', VoucherScheduleView.as_view()),
+    path('api/mikrotik/<int:router_id>/scheduler/', SchedulerView.as_view()),
+<<<<<<< HEAD
+    path('api/mikrotik/<int:router_id>/terminal/', MikroTikTerminalView.as_view()),
+=======
+>>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 ]
+
+
+
+<<<<<<< HEAD
+
+=======
+>>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
