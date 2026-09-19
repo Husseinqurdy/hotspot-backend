@@ -85,6 +85,15 @@ class GSMDevice(models.Model):
     last_seen = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # ── Remote command flags (zinasomwa na kifaa kwenye kila poll ya
+    # /sms/outgoing/, kisha zinafutwa kiotomatiki baada ya kusomwa) ──
+    pending_restart = models.BooleanField(default=False, help_text="Amri ya soft-restart ya ESP32 inasubiri.")
+    pending_sim_reset = models.BooleanField(default=False, help_text="Amri ya hard power-cycle ya SIM800C inasubiri.")
+
+    # ── Monitoring (zinasasishwa na kifaa chenyewe kwenye kila poll) ──
+    battery_percent = models.FloatField(null=True, blank=True)
+    on_backup_power = models.BooleanField(default=False)
+    last_rssi = models.IntegerField(null=True, blank=True, help_text="GSM signal strength (CSQ raw value).")
 
     class Meta:
         ordering = ['client_id', 'network']

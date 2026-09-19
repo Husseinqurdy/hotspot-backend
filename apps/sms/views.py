@@ -81,24 +81,58 @@ class OutgoingSMSView(APIView):
         if error:
             return error
 
+        # ── Heartbeat ya hiari kutoka kwa kifaa (query params) ──
+        battery = request.query_params.get('battery')
+        backup = request.query_params.get('backup')
+        rssi = request.query_params.get('rssi')
+        update_fields = []
+        if battery is not None:
+            try:
+                device.battery_percent = float(battery)
+                update_fields.append('battery_percent')
+            except ValueError:
+                pass
+        if backup is not None:
+            device.on_backup_power = (backup == '1')
+            update_fields.append('on_backup_power')
+        if rssi is not None:
+            try:
+                device.last_rssi = int(rssi)
+                update_fields.append('last_rssi')
+            except ValueError:
+                pass
+        if update_fields:
+            device.save(update_fields=update_fields)
+
         from .models import OutgoingSMS
-        # MPYA: kifaa kinapata ujumbe wa client YEYOTE aliye kwenye
-        # eligible_clients yake — kwa kifaa cha kawaida hii ni client
-        # mmoja tu (mmiliki); kwa kifaa kinachoshirikiwa, ni mmiliki +
-        # walioongezwa kwenye shared_with.
         eligible_client_ids = [c.id for c in device.eligible_clients()]
         sms_list = OutgoingSMS.objects.filter(
             status='queued', client_id__in=eligible_client_ids
         ).order_by('-priority', 'created_at')[:10]
 
-        if not sms_list:
-            return Response({'messages': []})
+        # ── Command flags — soma na ufute papo hapo ──
+        commands = {}
+        cmd_update_fields = []
+        if device.pending_restart:
+            commands['restart'] = True
+            device.pending_restart = False
+            cmd_update_fields.append('pending_restart')
+        if device.pending_sim_reset:
+            commands['sim_reset'] = True
+            device.pending_sim_reset = False
+            cmd_update_fields.append('pending_sim_reset')
+        if cmd_update_fields:
+            device.save(update_fields=cmd_update_fields)
 
-        ids = [s.id for s in sms_list]
-        OutgoingSMS.objects.filter(id__in=ids).update(status='taken')
-        return Response({'messages': [{'id': s.id, 'phone': s.phone, 'message': s.message} for s in sms_list]})
+        messages = []
+        if sms_list:
+            ids = [s.id for s in sms_list]
+            OutgoingSMS.objects.filter(id__in=ids).update(status='taken')
+            messages = [{'id': s.id, 'phone': s.phone, 'message': s.message} for s in sms_list]
 
-
+        return Response({'messages': messages, 'commands': commands})
+    
+    
 class SMSSentView(APIView):
     permission_classes = [AllowAny]
 

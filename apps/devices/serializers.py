@@ -17,6 +17,8 @@ class GSMDeviceSerializer(serializers.ModelSerializer):
             'name', 'network', 'network_display',
             'lipa_number', 'phone_number', 'device_id', 'api_key',
             'description', 'is_active', 'last_seen', 'created_at',
+            'pending_restart', 'pending_sim_reset',
+            'battery_percent', 'on_backup_power', 'last_rssi',
         ]
         read_only_fields = ['id', 'status', 'api_key', 'last_seen', 'created_at']
 

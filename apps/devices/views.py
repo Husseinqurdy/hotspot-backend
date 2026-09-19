@@ -141,6 +141,23 @@ class GSMDeviceViewSet(viewsets.ModelViewSet):
         # nayo — tunahesabu upya TU kwa eligible_clients mpya.
         self._resync_clients([c.id for c in device.eligible_clients()])
         return Response(self.get_serializer(device, context={'request': request}).data)
+    
+    @action(detail=True, methods=['post'], url_path='command')
+    def command(self, request, pk=None):
+        """Superadmin/client anatuma amri ya remote kwa kifaa: 'restart' au 'sim_reset'."""
+        if not request.user.is_superadmin():
+            return Response(status=403)
+        device = self.get_object()
+        action_name = request.data.get('action')
+        if action_name == 'restart':
+            device.pending_restart = True
+            device.save(update_fields=['pending_restart'])
+        elif action_name == 'sim_reset':
+            device.pending_sim_reset = True
+            device.save(update_fields=['pending_sim_reset'])
+        else:
+            return Response({'error': "action lazima iwe 'restart' au 'sim_reset'"}, status=400)
+        return Response({'message': f'Amri {action_name} imepangwa kwa {device.device_id}'})
 
     def create(self, request, *args, **kwargs):
         # Kuunda GSMDevice moja kwa moja (bila kupitia checkin/claim
