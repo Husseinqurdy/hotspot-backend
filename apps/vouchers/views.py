@@ -102,7 +102,6 @@ class VoucherScheduleView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=500)
         finally:
-<<<<<<< HEAD
             api.disconnect()
 
 
@@ -248,6 +247,3 @@ class DailySalesReportViewSet(viewsets.ReadOnlyModelViewSet):
                 pass
         return qs
 
-=======
-            api.disconnect()
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

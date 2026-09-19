@@ -44,8 +44,4 @@ class GSMDevicePublicSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = GSMDevice
-<<<<<<< HEAD
         fields = ['network', 'network_display', 'lipa_number']
-=======
-        fields = ['network','network_display','lipa_number']
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

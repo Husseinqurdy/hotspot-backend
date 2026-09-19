@@ -8,11 +8,7 @@ from apps.routers.mikrotik_views import (
     HotspotCookiesView, HotspotHostsView, HotspotServersView, IPBindingsView, RouterStatusView, RouterInterfacesView, RouterIPAddressesView,
     HotspotUsersView, HotspotActiveSessionsView, HotspotUserDeleteView,
     RouterRestartView, BandwidthView, RouterFirewallView,
-<<<<<<< HEAD
     HotspotProfilesView, RouterLogsView, RouterDNSView, SchedulerView, WalledGardenIPView, WalledGardenView,MikroTikTerminalView,
-=======
-    HotspotProfilesView, RouterLogsView, RouterDNSView, SchedulerView, WalledGardenIPView, WalledGardenView,
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 )
 
 urlpatterns = [
@@ -63,15 +59,9 @@ urlpatterns = [
     path('api/mikrotik/<int:router_id>/hotspot/cookies/', HotspotCookiesView.as_view()),
     path('api/mikrotik/<int:router_id>/voucher/schedule/', VoucherScheduleView.as_view()),
     path('api/mikrotik/<int:router_id>/scheduler/', SchedulerView.as_view()),
-<<<<<<< HEAD
     path('api/mikrotik/<int:router_id>/terminal/', MikroTikTerminalView.as_view()),
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 ]
 
 
 
-<<<<<<< HEAD
 
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

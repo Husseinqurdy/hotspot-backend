@@ -1,19 +1,13 @@
 from django.db import models
-<<<<<<< HEAD
 from django.utils import timezone
 from apps.clients.models import Client
 from apps.packages.models import Package
 from apps.accounts.models import User
-=======
-from apps.clients.models import Client
-from apps.packages.models import Package
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 
 
 class ClientPackagePrice(models.Model):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='package_prices')
     package = models.ForeignKey(Package, on_delete=models.CASCADE, related_name='client_prices')
-<<<<<<< HEAD
 
     # KABLA: unique=True (kiasi hiki hakikuweza kutumika na client
     # yeyote mwingine kwenye MFUMO MZIMA). SASA: matching inaanzia
@@ -23,9 +17,6 @@ class ClientPackagePrice(models.Model):
     # apps/packages/models.py::Package.clean()).
     unique_amount = models.PositiveIntegerField()
 
-=======
-    unique_amount = models.PositiveIntegerField(unique=True)
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -33,15 +24,12 @@ class ClientPackagePrice(models.Model):
         verbose_name = "Client Package Price"
         verbose_name_plural = "Client Package Prices"
         ordering = ['unique_amount']
-<<<<<<< HEAD
         constraints = [
             models.UniqueConstraint(
                 fields=['client', 'unique_amount'],
                 name='unique_amount_per_client',
             ),
         ]
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 
     def __str__(self):
         return f"{self.client} | {self.package} | {self.unique_amount}"
@@ -81,7 +69,6 @@ class Payment(models.Model):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='payments')
     package = models.ForeignKey(Package, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments')
     client_package_price = models.ForeignKey(ClientPackagePrice, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments')
-<<<<<<< HEAD
 
     # MPYA: rejea ya moja kwa moja kwa GSMDevice iliyoleta malipo haya.
     # Imeitwa 'gsm_device' (SIYO 'device') KWA MAKUSUDI — FK inayoitwa
@@ -161,30 +148,3 @@ class WithdrawalRequest(models.Model):
 
     def __str__(self):
         return f"{self.client.business_name} | TZS {self.amount} | {self.status}"
-=======
-    transaction_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
-    phone_number = models.CharField(max_length=20)
-    amount = models.PositiveIntegerField()
-    network = models.CharField(max_length=20, choices=NETWORK_CHOICES, default=NETWORK_UNKNOWN)
-    device_id = models.CharField(max_length=100, blank=True, null=True)
-    raw_sms = models.TextField()
-    sms_hash = models.CharField(max_length=64, unique=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
-    commission_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    client_share = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    processed_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['amount']),
-            models.Index(fields=['transaction_id']),
-            models.Index(fields=['phone_number']),
-            models.Index(fields=['network']),
-            models.Index(fields=['status']),
-        ]
-
-    def __str__(self):
-        return f"{self.client} | {self.amount} TZS | {self.status}"
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

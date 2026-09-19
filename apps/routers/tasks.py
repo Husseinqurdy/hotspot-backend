@@ -338,6 +338,7 @@ def sync_voucher_status_from_mikrotik():
         routers_needed[voucher.router_id] = voucher.router
 
     scheduler_names_by_router = {}
+    hotspot_user_names_by_router = {}
     for router_id, router in routers_needed.items():
         try:
             api = get_mikrotik_connection(router)
@@ -347,23 +348,38 @@ def sync_voucher_status_from_mikrotik():
             try:
                 schedulers = api.command('/system/scheduler/print')
                 scheduler_names_by_router[router_id] = {s.get('name', '') for s in schedulers}
+                # MUHIMU: soma pia hotspot users kama uthibitisho wa PILI, HURU.
+                # Voucher inatambuliwa 'imeisha' TU ikiwa haionekani kwenye
+                # orodha ZOTE MBILI — hii inazuia 'false negative' inayotokana
+                # na MikroTik kurudisha orodha ya scheduler isiyokamilika kwa
+                # bahati mbaya wakati wa muunganiko usio thabiti (flaky), kwa
+                # sababu on-event script inafuta VYOTE viwili kwa wakati mmoja
+                # voucher inapoisha kweli.
+                users = api.command('/ip/hotspot/user/print')
+                hotspot_user_names_by_router[router_id] = {u.get('name', '') for u in users}
             except Exception as e:
-                logger.error(f"Imeshindwa kusoma schedulers kutoka {router.name}: {e}")
+                logger.error(f"Imeshindwa kusoma schedulers/users kutoka {router.name}: {e}")
             finally:
                 api.disconnect()
         except Exception as e:
             logger.error(f"sync_voucher_status: connection error {router.name}: {e}")
-
     # ═══════════════════════════════════════════════════════════
     # (B) LEGACY / MANUAL — mantiki ya ZAMANI, router MOJA tu
     # ═══════════════════════════════════════════════════════════
     legacy_used_count = 0
     for voucher in legacy_vouchers:
         scheduler_names = scheduler_names_by_router.get(voucher.router_id)
-        if scheduler_names is None:
-            continue  # router haikufikika mzunguko huu
+        hotspot_names = hotspot_user_names_by_router.get(voucher.router_id)
+        if scheduler_names is None or hotspot_names is None:
+            continue  # router haikufikika mzunguko huu (uthibitisho hauko kamili)
 
-        if voucher.code in scheduler_names:
+        # Voucher inahesabiwa 'ipo' ikiwa inaonekana kwenye orodha
+        # YOYOTE kati ya mbili (scheduler AU hotspot user) — hii
+        # inazuia 'false negative' ya orodha moja kurudi isiyokamilika
+        # kwa bahati mbaya wakati wa muunganiko usio thabiti (flaky).
+        code_present = (voucher.code in scheduler_names) or (voucher.code in hotspot_names)
+
+        if code_present:
             if voucher.used_at is None:
                 voucher.used_at = now
                 voucher.expires_at = now + timezone.timedelta(
@@ -384,24 +400,25 @@ def sync_voucher_status_from_mikrotik():
         else:
             if voucher.used_at is not None:
                 if voucher.sync_missing_since is None:
-                    # Mara ya KWANZA kuikosa — usiifute bado. Weka alama
-                    # tu, tuithibitishe tena mzunguko unaofuata (dakika 1)
-                    # kabla ya kuiamini imekwisha kweli.
+                    # Mara ya KWANZA kuikosa (kwenye orodha ZOTE MBILI)
+                    # — usiifute bado. Weka alama tu, tuithibitishe tena
+                    # mzunguko unaofuata (dakika 1) kabla ya kuiamini
+                    # imekwisha kweli.
                     voucher.sync_missing_since = now
                     voucher.save(update_fields=['sync_missing_since'])
                     logger.warning(
                         f"⚠️ Voucher {voucher.code} (manual) haionekani kwenye "
-                        f"schedulers za {voucher.router.name} — inasubiri "
-                        f"uthibitisho mzunguko ujao"
+                        f"schedulers WALA hotspot users za {voucher.router.name} "
+                        f"— inasubiri uthibitisho mzunguko ujao"
                     )
                 else:
-                    # Mara ya PILI mfululizo kuikosa — sasa tunaithibitisha
+                    # Mara ya PILI mfululizo kuikosa (kwenye orodha ZOTE
+                    # MBILI, mizunguko miwili tofauti) — sasa tunaithibitisha
                     # imekwisha kweli.
                     voucher.status = 'expired'
                     voucher.sync_missing_since = None
                     voucher.save(update_fields=['status', 'sync_missing_since'])
                     logger.info(f"✅ Voucher {voucher.code} (manual) imeisha - imewekwa expired")
-
     # ═══════════════════════════════════════════════════════════
     # (A) PRESENCE-BASED — routers kadhaa, kama ilivyoongezwa hivi karibuni
     # ═══════════════════════════════════════════════════════════
@@ -413,13 +430,15 @@ def sync_voucher_status_from_mikrotik():
         routers_map[rid]['presences'].append(presence)
 
     # ── Hatua 1: tambua ni presence zipi zimetumika (scheduler ipo) ──
+    # hotspot user ipo — uthibitisho wa vyanzo viwili huru) ──
     used_presences = []  # [(presence, router)]
     for router_id, data in routers_map.items():
         scheduler_names = scheduler_names_by_router.get(router_id)
-        if scheduler_names is None:
+        hotspot_names = hotspot_user_names_by_router.get(router_id)
+        if scheduler_names is None or hotspot_names is None:
             continue  # router haikufikika mzunguko huu
         for presence in data['presences']:
-            if presence.voucher.code in scheduler_names:
+            if presence.voucher.code in scheduler_names or presence.voucher.code in hotspot_names:
                 used_presences.append(presence)
 
     for presence in used_presences:
@@ -479,12 +498,15 @@ def sync_voucher_status_from_mikrotik():
 
     # ── Hatua 2: vouchers zilizoisha muda kwenye router walipotumia ──
     # (presence ambayo BADO ni 'active' kwenye router = Voucher.router,
-    # lakini scheduler yake imeshatoweka = muda umeisha)
+    # lakini scheduler NA hotspot user zimeshatoweka = muda umeisha, kwa
+    # uthibitisho wa mizunguko miwili mfululizo kama kundi B)
     used_presence_ids = {p.id for p in used_presences}
     for router_id, data in routers_map.items():
         scheduler_names = scheduler_names_by_router.get(router_id)
-        if scheduler_names is None:
+        hotspot_names = hotspot_user_names_by_router.get(router_id)
+        if scheduler_names is None or hotspot_names is None:
             continue
+        router = data['router']
         for presence in data['presences']:
             if presence.id in used_presence_ids:
                 continue  # bado inatumika sasa hivi, si kesi hii
@@ -492,10 +514,27 @@ def sync_voucher_status_from_mikrotik():
             is_used_router = (
                 voucher.used_at is not None and voucher.router_id == presence.router_id
             )
-            if is_used_router and voucher.code not in scheduler_names:
-                voucher.status = 'expired'
-                voucher.save(update_fields=['status'])
-                logger.info(f"✅ Voucher {voucher.code} imeisha - imewekwa expired")
+            if not is_used_router:
+                continue
+            code_present = voucher.code in scheduler_names or voucher.code in hotspot_names
+            if code_present:
+                if voucher.sync_missing_since is not None:
+                    voucher.sync_missing_since = None
+                    voucher.save(update_fields=['sync_missing_since'])
+            else:
+                if voucher.sync_missing_since is None:
+                    voucher.sync_missing_since = now
+                    voucher.save(update_fields=['sync_missing_since'])
+                    logger.warning(
+                        f"⚠️ Voucher {voucher.code} haionekani kwenye "
+                        f"schedulers WALA hotspot users za {router.name} "
+                        f"— inasubiri uthibitisho mzunguko ujao"
+                    )
+                else:
+                    voucher.status = 'expired'
+                    voucher.sync_missing_since = None
+                    voucher.save(update_fields=['status', 'sync_missing_since'])
+                    logger.info(f"✅ Voucher {voucher.code} imeisha - imewekwa expired")
 
     logger.info(
         f"sync_voucher_status_from_mikrotik: legacy vouchers {len(legacy_vouchers)} "

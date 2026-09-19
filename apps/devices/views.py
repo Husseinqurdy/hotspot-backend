@@ -88,7 +88,6 @@ class GSMDeviceViewSet(viewsets.ModelViewSet):
         devices = GSMDevice.objects.filter(status=GSMDevice.STATUS_UNCLAIMED).order_by('-created_at')
         return Response(self.get_serializer(devices, many=True, context={'request': request}).data)
 
-    @action(detail=True, methods=['post'], url_path='claim')
     def _resync_clients(self, client_ids):
         """
         Baada ya shared_with kubadilika (claim au update), packages
@@ -101,6 +100,7 @@ class GSMDeviceViewSet(viewsets.ModelViewSet):
         for pkg in Package.objects.filter(client_id__in=client_ids).select_related('client'):
             pkg.resync_unique_amount()
 
+    @action(detail=True, methods=['post'], url_path='claim')
     def claim(self, request, pk=None):
         """
         Superadmin anaweka client kwa kifaa cha 'unclaimed'. Baada ya
@@ -223,7 +223,6 @@ class GSMDeviceViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='public')
     def public_list(self, request):
-<<<<<<< HEAD
         """Lipa namba za client fulani, kwa umma. Inahitaji client_id."""
         client_id = request.query_params.get('client_id')
         if not client_id:
@@ -233,7 +232,3 @@ class GSMDeviceViewSet(viewsets.ModelViewSet):
             is_active=True, status=GSMDevice.STATUS_ACTIVE,
         ).distinct().order_by('network')
         return Response(GSMDevicePublicSerializer(devices, many=True).data)
-=======
-        devices = GSMDevice.objects.filter(is_active=True).order_by('network')
-        return Response(GSMDevicePublicSerializer(devices, many=True).data)
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

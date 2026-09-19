@@ -519,7 +519,4 @@ def get_mikrotik_connection(router):
         password=router.api_password,
     )
     return api if api.connect() else None
-<<<<<<< HEAD
 
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

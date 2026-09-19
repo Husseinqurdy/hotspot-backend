@@ -102,7 +102,6 @@ class Voucher(models.Model):
         # hitilafu hii, badala ya kutegemea kila task 'ikumbuke'
         # kuisahihisha.
         super().save(*args, **kwargs)
-<<<<<<< HEAD
 
     def __str__(self):
         return f"{self.code} | {self.status}"
@@ -174,6 +173,3 @@ class DailySalesReport(models.Model):
     def __str__(self):
         return f"{self.client.business_name} — {self.date} — TZS {self.total_revenue}"
 
-=======
-    def __str__(self): return f"{self.code} | {self.status}"
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

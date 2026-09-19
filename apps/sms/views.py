@@ -64,7 +64,6 @@ class ReceiveSMSView(APIView):
         network = network_hint if network_hint else detect_network(phone)
 
         from apps.sms.tasks import process_payment_sms
-<<<<<<< HEAD
         process_payment_sms.apply(kwargs={
             'phone': phone,
             'sms_text': message,
@@ -73,10 +72,6 @@ class ReceiveSMSView(APIView):
         })
         return Response({'status': 'received', 'network': network})
 
-=======
-        process_payment_sms.apply(kwargs={'phone': phone, 'sms_text': message, 'network': network, 'device_id': device_id})
-        return Response({'status':'received','network':network})
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 
 class OutgoingSMSView(APIView):
     permission_classes = [AllowAny]
@@ -126,11 +121,6 @@ class SMSSentView(APIView):
                     sms.retries += 1
                     sms.status = 'failed' if sms.retries >= 3 else 'queued'
                 sms.save()
-<<<<<<< HEAD
             except OutgoingSMS.DoesNotExist:
                 pass
         return Response({'status': 'ok'})
-=======
-            except: pass
-        return Response({'status':'ok'})
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

@@ -21,14 +21,9 @@ class OutgoingSMS(models.Model):
     retries = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     sent_at = models.DateTimeField(null=True, blank=True)
-<<<<<<< HEAD
 
     class Meta:
         ordering = ['-priority', 'created_at']
 
     def __str__(self):
         return f"SMS → {self.phone} [{self.status}]"
-=======
-    class Meta: ordering = ['-priority','created_at']
-    def __str__(self): return f"SMS → {self.phone} [{self.status}]"
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

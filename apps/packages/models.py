@@ -42,7 +42,6 @@ class Package(models.Model):
         return self.duration_value * 60
 
     def _mikrotik_session_timeout(self):
-<<<<<<< HEAD
         """
         Session-timeout kwa MikroTik profile — daima 'unlimited' (00:00:00),
         bila kujali muda wa package. Muda halisi wa matumizi unadhibitiwa
@@ -51,21 +50,6 @@ class Package(models.Model):
         return '00:00:00'
 
     def _scheduler_interval(self):
-=======
-        """Toa session-timeout string sahihi kwa MikroTik."""
-        if self.duration_unit == 'hours':
-            return f"{self.duration_value}h"
-        elif self.duration_unit == 'days':
-            return f"{self.duration_value * 24}h"
-        return f"{self.duration_minutes}m"
-
-    def _scheduler_interval(self):
-        """
-        Interval ya scheduler inayokimbia kufuta vouchers zilizoisha muda.
-        - Package za saa  → scheduler inakimbia kila dakika 1
-        - Package za siku → scheduler inakimbia kila dakika 5
-        """
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         if self.duration_unit == 'hours':
             return '00:01:00'
         elif self.duration_unit == 'days':
@@ -73,15 +57,6 @@ class Package(models.Model):
         return '00:01:00'
 
     def _mikrotik_limit_uptime(self):
-<<<<<<< HEAD
-=======
-        """
-        limit-uptime kwa MikroTik hotspot user.
-        - 1h  → 01:00:00
-        - 2h  → 02:00:00
-        - 1d  → 1d 00:00:00
-        """
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         if self.duration_unit == 'hours':
             return f"{self.duration_value:02d}:00:00"
         elif self.duration_unit == 'days':
@@ -99,7 +74,6 @@ class Package(models.Model):
             return f"Saa {self.duration_minutes // 60}"
         return f"Siku {self.duration_minutes // 1440}"
 
-<<<<<<< HEAD
     def _eligible_client_ids_for_conflict_check(self):
         """
         Kundi la client_ids linalotakiwa likaguliwe kwa mgongano wa
@@ -167,14 +141,11 @@ class Package(models.Model):
             client=self.client, package=self
         ).update(unique_amount=new_unique_amount)
 
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
     def clean(self):
         if not self.client_id:
             return
         try:
             from apps.payments.models import ClientPackagePrice
-<<<<<<< HEAD
             new_unique_amount = self._compute_unique_amount()
 
             eligible_ids = self._eligible_client_ids_for_conflict_check()
@@ -208,21 +179,6 @@ class Package(models.Model):
                             f"kimoja cha malipo. Tafadhali badilisha bei yako."
                         )
                     })
-=======
-            new_unique_amount = int(self.price) + self.client.identifier
-            conflict = ClientPackagePrice.objects.filter(
-                unique_amount=new_unique_amount
-            ).exclude(package=self).first()
-            if conflict:
-                raise ValidationError({
-                    'price': (
-                        f"Bei hii inasababisha mgongano! Kiasi {new_unique_amount} "
-                        f"tayari kinatumika na '{conflict.client.business_name}' "
-                        f"kwenye package '{conflict.package.name}'. "
-                        f"Tafadhali badilisha bei yako."
-                    )
-                })
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         except ImportError:
             pass
 
@@ -245,11 +201,7 @@ class Package(models.Model):
             super().save(*args, **kwargs)
 
             from apps.payments.models import ClientPackagePrice
-<<<<<<< HEAD
             new_unique_amount = self._compute_unique_amount()
-=======
-            new_unique_amount = int(self.price) + self.client.identifier
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 
             if is_new:
                 ClientPackagePrice.objects.create(
@@ -278,10 +230,7 @@ class Package(models.Model):
           2. Scheduler moja ya package — backup mechanism inayofuta vouchers
              zilizofika limit-uptime
         """
-<<<<<<< HEAD
         results = []
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         try:
             from apps.routers.models import MikroTikRouter
             from apps.routers.mikrotik import get_mikrotik_connection
@@ -289,11 +238,7 @@ class Package(models.Model):
             routers = MikroTikRouter.objects.filter(client=self.client, is_online=True)
             if not routers.exists():
                 logger.warning(f"Hakuna router online ya {self.client.business_name}")
-<<<<<<< HEAD
                 return results
-=======
-                return
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 
             rate_limit      = f"{self.speed_up}M/{self.speed_down}M"
             session_timeout = self._mikrotik_session_timeout()
@@ -301,30 +246,6 @@ class Package(models.Model):
             interval        = self._scheduler_interval()
             sched_name      = f"expire-{self.mikrotik_profile}"
 
-<<<<<<< HEAD
-=======
-            # ── On Login script ───────────────────────────────────────────────
-            # Inatekelezwa pale mtumiaji YEYOTE (manual au batch) anapoingiza
-            # voucher kwenye hotspot login page.
-            #
-            # MAREKEBISHO MUHIMU:
-            # Awali ilikuwa: :if ([/system scheduler find name=$voucher]="") do={
-            # Tatizo: /system/scheduler/find inarudisha LIST (object), si string.
-            #         Kulinganisha list na "" kunaweza kutofanya kazi vizuri
-            #         kwenye RouterOS versions zote — hasa kwa batch vouchers.
-            #
-            # Sasa: [:len [/system scheduler find name=$voucher]]=0
-            #       Hii inahesabu idadi ya schedulers zilizopata — kama 0 (haipo)
-            #       iunda scheduler mpya. Hii inafanya kazi kwa manual NA batch.
-            # MUHIMU: limit_uptime imewekwa ndani ya quotes ("...").
-            # Kwa packages za saa, thamani yake haina nafasi (e.g. "02:00:00")
-            # — bila quotes ingefanya kazi kwa bahati.
-            # Kwa packages za siku, thamani ina nafasi (e.g. "1d 00:00:00")
-            # — bila quotes, MikroTik inasoma hii kama maneno MAWILI tofauti
-            # (interval=1d na 00:00:00), na command ya /system scheduler add
-            # inashindwa kimya kimya (silent fail) — hivyo scheduler
-            # haiundwi kabisa kwa vouchers za siku.
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
             on_login_script = (
                 f":local voucher $user;\r\n"
                 f":if ([:len [/system scheduler find name=$voucher]]=0) do={{\r\n"
@@ -338,12 +259,6 @@ class Package(models.Model):
                 f"}}"
             )
 
-<<<<<<< HEAD
-=======
-            # ── Script ya scheduler ya background (backup mechanism) ──────────
-            # Inakimbia kila muda mfupi na kufuta vouchers ambazo zimefika
-            # limit-uptime — kama on-login script ilishindwa kwa sababu yoyote.
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
             on_event = (
                 f":foreach u in=[/ip/hotspot/user find profile={self.mikrotik_profile}] do={{"
                 f":local uname [/ip/hotspot/user get $u name];"
@@ -361,25 +276,16 @@ class Package(models.Model):
                     api = get_mikrotik_connection(router)
                     if not api:
                         logger.warning(f"Haiwezekani kuunganika {router.name}")
-<<<<<<< HEAD
                         results.append({'router': router.name, 'status': 'unreachable'})
                         continue
 
-=======
-                        continue
-
-                    # ── 1. Sync hotspot profile + On Login script ─────────────
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
                     existing_profile = api.command(
                         '/ip/hotspot/user/profile/print',
                         queries={'name': self.mikrotik_profile}
                     )
 
-<<<<<<< HEAD
                     profile_was_new = not existing_profile
 
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
                     if existing_profile:
                         api.command('/ip/hotspot/user/profile/set', {
                             '.id': existing_profile[0]['.id'],
@@ -399,10 +305,6 @@ class Package(models.Model):
                         })
                         logger.info(f"✅ Profile '{self.mikrotik_profile}' created kwenye {router.name}")
 
-<<<<<<< HEAD
-=======
-                    # ── 2. Sync scheduler ya background ──────────────────────
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
                     existing_sched = api.command(
                         '/system/scheduler/print',
                         queries={'name': sched_name}
@@ -430,26 +332,17 @@ class Package(models.Model):
                         logger.info(f"✅ Scheduler '{sched_name}' created kwenye {router.name}")
 
                     api.disconnect()
-<<<<<<< HEAD
                     results.append({'router': router.name, 'status': 'created' if profile_was_new else 'updated'})
 
                 except Exception as e:
                     logger.error(f"MikroTik sync failed kwa {router.name}: {e}")
                     results.append({'router': router.name, 'status': 'failed', 'error': str(e)})
-=======
-
-                except Exception as e:
-                    logger.error(f"MikroTik sync failed kwa {router.name}: {e}")
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 
         except Exception as e:
             logger.error(f"_sync_to_mikrotik error: {e}")
 
-<<<<<<< HEAD
         return results
 
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
     def _delete_from_mikrotik(self, profile_name, client):
         """Futa profile + scheduler kwenye MikroTik routers zote za client."""
         try:
@@ -468,10 +361,6 @@ class Package(models.Model):
                     if not api:
                         continue
 
-<<<<<<< HEAD
-=======
-                    # Futa profile
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
                     existing = api.command(
                         '/ip/hotspot/user/profile/print',
                         queries={'name': profile_name}
@@ -480,10 +369,6 @@ class Package(models.Model):
                         api._talk(['/ip/hotspot/user/profile/remove', f'=.id={existing[0][".id"]}'])
                         logger.info(f"✅ Profile '{profile_name}' deleted kutoka {router.name}")
 
-<<<<<<< HEAD
-=======
-                    # Futa scheduler ya background
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
                     existing_sched = api.command(
                         '/system/scheduler/print',
                         queries={'name': sched_name}

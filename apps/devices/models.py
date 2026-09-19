@@ -85,7 +85,6 @@ class GSMDevice(models.Model):
     last_seen = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-<<<<<<< HEAD
 
     class Meta:
         ordering = ['client_id', 'network']
@@ -146,7 +145,3 @@ class GSMDevice(models.Model):
             return Client.objects.none()
         ids = [self.client_id] + list(self.shared_with.values_list('id', flat=True))
         return Client.objects.filter(id__in=ids)
-=======
-    class Meta: ordering = ['network']
-    def __str__(self): return f"{self.name} ({self.get_network_display()}) - {self.lipa_number}"
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

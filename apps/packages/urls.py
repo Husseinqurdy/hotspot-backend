@@ -9,8 +9,4 @@ urlpatterns = [
     path('sync-all-from-mikrotik/',              SyncAllPackagesFromMikroTikView.as_view()),
     path('<int:package_id>/sync-from-mikrotik/', SyncPackageFromMikroTikView.as_view()),
     path('', include(router.urls)),
-<<<<<<< HEAD
 ]
-=======
-]
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

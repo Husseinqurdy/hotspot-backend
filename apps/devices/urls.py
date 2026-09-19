@@ -4,7 +4,6 @@ from .views import GSMDeviceViewSet, CheckinView
 
 router = DefaultRouter()
 router.register('', GSMDeviceViewSet, basename='device')
-<<<<<<< HEAD
 
 urlpatterns = [
     # MUHIMU: checkin/ iko NJE ya router (ni APIView ya kawaida ya
@@ -15,6 +14,3 @@ urlpatterns = [
     path('checkin/', CheckinView.as_view(), name='device-checkin'),
     path('', include(router.urls)),
 ]
-=======
-urlpatterns = [path('', include(router.urls))]
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

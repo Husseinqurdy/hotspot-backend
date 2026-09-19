@@ -11,17 +11,9 @@ def is_valid_phone(phone):
 
 def extract_phone_from_sms(sms_text):
     """Toa namba ya simu kutoka SMS text."""
-<<<<<<< HEAD
     match = re.search(r'(255\d{9})', sms_text)
     if match:
         return '+' + match.group(1)
-=======
-    # Tafuta 255XXXXXXXXX
-    match = re.search(r'(255\d{9})', sms_text)
-    if match:
-        return '+' + match.group(1)
-    # Tafuta 07XXXXXXXXX au 06XXXXXXXXX
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
     match = re.search(r'(0[67]\d{8})', sms_text)
     if match:
         return '+255' + match.group(1)[1:]
@@ -71,7 +63,6 @@ def queue_sms(phone, message, priority=0, client=None):
     na kifaa chochote kwenye mfumo mpya wa isolated devices.
     """
     from apps.sms.models import OutgoingSMS
-<<<<<<< HEAD
     if not is_valid_phone(phone):
         logger.warning(f"queue_sms skipped — phone si namba halisi: {phone}")
         return
@@ -97,13 +88,6 @@ def _generate_shared_voucher_code():
         if not Voucher.objects.filter(code=code).exists():
             return code
     return generate_voucher_code() + generate_voucher_code()[:2]
-=======
-    # ✅ Hifadhi tu kama phone ni namba halisi
-    if not is_valid_phone(phone):
-        logger.warning(f"queue_sms skipped — phone si namba halisi: {phone}")
-        return
-    OutgoingSMS.objects.create(phone=phone, message=message, priority=priority)
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 
 
 @shared_task(bind=True, max_retries=2)
@@ -113,7 +97,6 @@ def process_payment_sms(self, phone, sms_text, network='unknown', device_id=''):
     from apps.routers.models import MikroTikRouter, MikroTikJob
 
     try:
-<<<<<<< HEAD
         # ✅ MUHIMU — MSINGI WA ISOLATION: device_id ndiyo chanzo cha
         # kwanza cha ukweli kuhusu ni CLIENT(S) gani anahusika. Bila
         # kifaa kinachotambulika, HATUENDELEI KABISA.
@@ -136,8 +119,6 @@ def process_payment_sms(self, phone, sms_text, network='unknown', device_id=''):
         eligible_clients = list(device.eligible_clients())
         eligible_client_ids = [c.id for c in eligible_clients]
 
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         # ✅ Kama phone si namba halisi, toa kutoka SMS
         if not is_valid_phone(phone):
             extracted = extract_phone_from_sms(sms_text)
@@ -159,30 +140,22 @@ def process_payment_sms(self, phone, sms_text, network='unknown', device_id=''):
         if not parsed:
             logger.warning(f"SMS haikuweza kusomwa: {sms_text[:80]}")
             if phone:
-<<<<<<< HEAD
                 # Kifaa kisicho na sharing kina client mmoja tu wa
                 # kutumia hapa; kikiwa na sharing, tunatumia mmiliki
                 # mkuu kama default ya kutumia kutuma taarifa hii.
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
                 queue_sms(
                     phone,
                     "Samahani, malipo yako hayakutambuliwa. "
                     "Hakikisha umelipa kiasi sahihi.\n"
                     "Sorry, your payment was not recognized.",
-<<<<<<< HEAD
                     priority=5,
                     client=device.client,
-=======
-                    priority=5
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
                 )
             return
 
         amount = int(parsed['amount'])
         reference = parsed['reference']
 
-<<<<<<< HEAD
         logger.info(
             f"Payment SMS: device={device.device_id}, "
             f"eligible_clients={[c.business_name for c in eligible_clients]}, "
@@ -194,28 +167,18 @@ def process_payment_sms(self, phone, sms_text, network='unknown', device_id=''):
         # siyo lazima client mmoja pekee — ni KUNDI la kifaa hiki.
         # Kwa kifaa kisicho na sharing, hii ni sawa na
         # client=device.client moja kwa moja.
-=======
-        logger.info(f"Payment SMS: phone={phone}, amount={amount}, ref={reference}")
-
-        # ✅ Tafuta ClientPackagePrice kwa unique_amount
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         try:
             cpp = ClientPackagePrice.objects.select_related(
                 'client', 'package'
             ).get(client_id__in=eligible_client_ids, unique_amount=amount, is_active=True)
         except ClientPackagePrice.DoesNotExist:
-<<<<<<< HEAD
             logger.warning(f"Hakuna package ya kiasi {amount} kwa eligible_clients={eligible_client_ids}")
-=======
-            logger.warning(f"Hakuna package ya kiasi {amount}")
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
             if phone:
                 queue_sms(
                     phone,
                     f"Samahani, hakuna package ya TZS {amount}. "
                     f"Tafadhali wasiliana na msambazaji wako.\n"
                     f"Sorry, no package found for TZS {amount}.",
-<<<<<<< HEAD
                     priority=5,
                     client=device.client,
                 )
@@ -238,9 +201,6 @@ def process_payment_sms(self, phone, sms_text, network='unknown', device_id=''):
                     "Samahani, kuna hitilafu ya kiufundi. Wasiliana na msambazaji.",
                     priority=5,
                     client=device.client,
-=======
-                    priority=5
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
                 )
             return
 
@@ -251,11 +211,7 @@ def process_payment_sms(self, phone, sms_text, network='unknown', device_id=''):
         if not client.is_active:
             logger.warning(f"Client {client.business_name} amezuiwa")
             if phone:
-<<<<<<< HEAD
                 queue_sms(phone, "Samahani, huduma hii haipo. Wasiliana na msambazaji.", priority=5, client=client)
-=======
-                queue_sms(phone, "Samahani, huduma hii haipo. Wasiliana na msambazaji.", priority=5)
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
             return
 
         # ✅ Angalia package ni active
@@ -272,7 +228,6 @@ def process_payment_sms(self, phone, sms_text, network='unknown', device_id=''):
                     phone,
                     f"Samahani, package hii haipo tena. "
                     f"Zinazopatikana: {active_prices}",
-<<<<<<< HEAD
                     priority=5,
                     client=client,
                 )
@@ -285,27 +240,12 @@ def process_payment_sms(self, phone, sms_text, network='unknown', device_id=''):
             routers = [fallback] if fallback else []
 
         if not routers:
-=======
-                    priority=5
-                )
-            return
-
-        # ✅ Tafuta router
-        router = MikroTikRouter.objects.filter(client=client, is_online=True).first()
-        if not router:
-            router = MikroTikRouter.objects.filter(client=client).first()
-        if not router:
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
             if phone:
                 queue_sms(
                     phone,
                     "Samahani, router haijapatikana. Wasiliana na msambazaji.",
-<<<<<<< HEAD
                     priority=5,
                     client=client,
-=======
-                    priority=5
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
                 )
             return
 
@@ -313,10 +253,6 @@ def process_payment_sms(self, phone, sms_text, network='unknown', device_id=''):
         commission = float(amount) * (float(client.commission_rate) / 100)
         client_share = float(amount) - commission
 
-<<<<<<< HEAD
-=======
-        # ✅ Tumia phone iliyopatikana au ile ya kwenye SMS
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         customer_phone = phone or extract_phone_from_sms(sms_text) or 'unknown'
 
         # ✅ Unda Payment
@@ -324,10 +260,7 @@ def process_payment_sms(self, phone, sms_text, network='unknown', device_id=''):
             client=client,
             package=package,
             client_package_price=cpp,
-<<<<<<< HEAD
             gsm_device=device,
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
             phone_number=customer_phone,
             amount=amount,
             transaction_id=reference,
@@ -340,7 +273,6 @@ def process_payment_sms(self, phone, sms_text, network='unknown', device_id=''):
             client_share=client_share,
         )
 
-<<<<<<< HEAD
         from django.db.models import F
         client.__class__.objects.filter(pk=client.pk).update(
             balance=F('balance') + client_share
@@ -378,30 +310,6 @@ def process_payment_sms(self, phone, sms_text, network='unknown', device_id=''):
             f"Package: {package.name} | "
             f"Routers: {router_names} | "
             f"Voucher code: {voucher_code}"
-=======
-        # ✅ Unda Job
-        MikroTikJob.objects.create(
-            client=client,
-            router=router,
-            package=package,
-            payment=payment,
-            customer_phone=customer_phone,
-            action=MikroTikJob.ACTION_CREATE_VOUCHER,
-            status=MikroTikJob.STATUS_PENDING,
-        )
-
-        if phone:
-            queue_sms(
-                phone,
-                f"Malipo ya TZS {amount} yamepokelewa. Voucher itatumwa hivi karibuni.\n"
-                f"Payment TZS {amount} received. Voucher coming soon.",
-                priority=3
-            )
-
-        logger.info(
-            f"✅ Job created — Client: {client.business_name} | "
-            f"Package: {package.name} | Router: {router.name}"
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         )
 
     except Exception as e:
@@ -410,13 +318,7 @@ def process_payment_sms(self, phone, sms_text, network='unknown', device_id=''):
 
 
 @shared_task
-<<<<<<< HEAD
 def queue_voucher_sms(phone, code, package_name, duration, speed, payment_id=None, client=None):
-=======
-def queue_voucher_sms(phone, code, package_name, duration, speed, payment_id=None):
-
-    # SIMPLE GSM SAFE MESSAGE
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
     message = (
         f"Voucher: {code}\n"
         f"Package: {package_name}\n"
@@ -425,17 +327,12 @@ def queue_voucher_sms(phone, code, package_name, duration, speed, payment_id=Non
         f"Unganisha WiFi kisha ingiza voucher."
     )
 
-<<<<<<< HEAD
-=======
-    # REMOVE BAD CHARACTERS
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
     message = (
         message
         .replace('✅', '')
         .replace('\r', '')
     )
 
-<<<<<<< HEAD
     if client is None and payment_id:
         try:
             from apps.payments.models import Payment
@@ -446,8 +343,3 @@ def queue_voucher_sms(phone, code, package_name, duration, speed, payment_id=Non
     queue_sms(phone, message[:150], priority=10, client=client)
 
     logger.info(f"Voucher SMS queued → {phone}: {code}")
-=======
-    queue_sms(phone, message[:150], priority=10)
-
-    logger.info(f"Voucher SMS queued → {phone}: {code}")
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

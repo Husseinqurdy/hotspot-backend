@@ -126,7 +126,6 @@ class HotspotUsersView(APIView):
             api.disconnect()
 
     def post(self, request, router_id):
-<<<<<<< HEAD
         """Ongeza hotspot user mpya + rekodi Voucher kwa historia/ripoti.
 
         MUHIMU: kama 'username' iliyotumwa tayari ipo (kwenye MikroTik ya
@@ -145,9 +144,6 @@ class HotspotUsersView(APIView):
         itumie hii kwa ajili ya print card / SMS / orodha, siyo ile
         iliyotuma.
         """
-=======
-        """Ongeza hotspot user mpya."""
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         router = get_router_for_user(router_id, request.user)
         if not router:
             return Response({'error': 'Router haikupatikana'}, status=404)
@@ -155,7 +151,6 @@ class HotspotUsersView(APIView):
         if not api:
             return Response({'error': 'Router haipo online'}, status=503)
         try:
-<<<<<<< HEAD
             requested_username = request.data.get('username', '')
             profile = request.data.get('profile', 'default')
             comment = request.data.get('comment', 'Manual')
@@ -182,24 +177,11 @@ class HotspotUsersView(APIView):
             self._record_voucher(router, final_code, profile, comment)
 
             return Response({'message': f'User {final_code} ameongezwa', 'code': final_code})
-=======
-            username = request.data.get('username', '')
-            password = request.data.get('password', username)
-            profile  = request.data.get('profile', 'default')
-            comment  = request.data.get('comment', 'Manual')
-            if not username:
-                return Response({'error': 'username inahitajika'}, status=400)
-            success = api.add_hotspot_user(username, password, profile, comment)
-            if success:
-                return Response({'message': f'User {username} ameongezwa'})
-            return Response({'error': 'Imeshindwa kuongeza user'}, status=400)
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         except Exception as e:
             return Response({'error': str(e)}, status=500)
         finally:
             api.disconnect()
 
-<<<<<<< HEAD
     def _find_unique_code(self, api, preferred_code, max_attempts=8):
         """
         Rudisha code ya kipekee inayoweza kutumika salama — kwanza
@@ -267,8 +249,6 @@ class HotspotUsersView(APIView):
         except Exception as e:
             logger.error(f"_record_voucher error kwa {code}: {e}")
 
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
     def patch(self, request, router_id):
         """
         Hariri hotspot user iliyopo.
@@ -959,7 +939,6 @@ class SchedulerView(APIView):
             return Response({'error': str(e)}, status=500)
         finally:
             api.disconnect()
-<<<<<<< HEAD
 
 
 
@@ -1187,5 +1166,3 @@ class MikroTikTerminalView(APIView):
         finally:
             api.disconnect()
 
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

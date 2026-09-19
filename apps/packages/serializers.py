@@ -14,8 +14,4 @@ class PackageSerializer(serializers.ModelSerializer):
             'speed_up', 'speed_down', 'mikrotik_profile',
             'shared_users', 'is_active', 'created_at',
         ]
-<<<<<<< HEAD
         read_only_fields = ['id', 'created_at', 'duration_minutes']
-=======
-        read_only_fields = ['id', 'created_at', 'duration_minutes']
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

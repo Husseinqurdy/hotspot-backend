@@ -48,7 +48,6 @@ def expire_old_vouchers():
         api = get_mikrotik_connection(v.router)
         if api: api.remove_hotspot_user(v.code); api.disconnect()
         v.status = 'expired'; v.save(update_fields=['status']); count += 1
-<<<<<<< HEAD
     logger.info(f"Expired {count} vouchers")
 
 
@@ -316,6 +315,3 @@ def generate_daily_sales_report():
             f"TZS {total_revenue}"
         )
 
-=======
-    logger.info(f"Expired {count} vouchers")
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

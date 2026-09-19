@@ -117,9 +117,5 @@ class CompleteJobView(APIView):
             else:
                 job.status = MikroTikJob.STATUS_PENDING
             job.save(update_fields=['status','retries','error_message'])
-<<<<<<< HEAD
             return Response({'status':'failed','retry':job.retries<3})
 
-=======
-            return Response({'status':'failed','retry':job.retries<3})
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

@@ -13,7 +13,6 @@ router = DefaultRouter()
 router.register('print-batches', VoucherPrintBatchViewSet, basename='voucher-print-batch')
 router.register('sales-reports', DailySalesReportViewSet, basename='daily-sales-report')
 router.register('', VoucherViewSet, basename='voucher')
-<<<<<<< HEAD
 
 urlpatterns = [
     # generate-pdf/ ni APIView ya kawaida (siyo ViewSet), lazima iwe KABLA
@@ -23,6 +22,3 @@ urlpatterns = [
     path('', include(router.urls)),
 ]
 
-=======
-urlpatterns = [path('', include(router.urls))]
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

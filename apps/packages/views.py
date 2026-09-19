@@ -33,7 +33,6 @@ class PackageViewSet(viewsets.ModelViewSet):
 
 
 # ══════════════════════════════════════════════════════════════
-<<<<<<< HEAD
 # HELPER: geuza matokeo ya Package._sync_to_mikrotik() kuwa
 # ujumbe wa kirafiki unaotaja routers mpya zilizopata profile
 # ══════════════════════════════════════════════════════════════
@@ -64,16 +63,12 @@ def _push_suffix_message(push_results):
 # SYNC: Soma profile kutoka MikroTik → sasisha Package kwenye DB
 #       KISHA unda/sasisha profile hiyo kwenye routers ZOTE za
 #       client (auto-create kwenye router yoyote mpya isiyo nayo)
-=======
-# SYNC: Soma profile kutoka MikroTik → sasisha Package kwenye DB
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 # ══════════════════════════════════════════════════════════════
 
 class SyncPackageFromMikroTikView(APIView):
     """
     POST /api/packages/<package_id>/sync-from-mikrotik/
 
-<<<<<<< HEAD
     Hatua ya 1 (PULL): Inasoma hotspot profile ya package kutoka
     router ya kwanza online ya client, na kusasisha Package model
     kwenye database kulingana na hiyo (shared_users, speed, duration).
@@ -82,16 +77,6 @@ class SyncPackageFromMikroTikView(APIView):
     Package._sync_to_mikrotik() ili kuunda/kusasisha profile hiyo
     kwenye ROUTERS ZOTE online za client — hivyo router yoyote
     mpya ambayo bado haina profile hii itaipata moja kwa moja.
-=======
-    Inasoma hotspot profile ya package kutoka MikroTik router
-    na kusasisha Package model kwenye database — bila kubadilisha MikroTik.
-
-    Fields zinazosasishwa:
-      - shared_users  ← profile['shared-users']
-      - speed_up      ← rate-limit (e.g. "5M/2M" → speed_up=5)
-      - speed_down    ← rate-limit (e.g. "5M/2M" → speed_down=2)
-      - duration_value + duration_unit ← session-timeout (e.g. "2h" → 2 hours)
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
     """
     permission_classes = [IsAuthenticated]
 
@@ -121,11 +106,7 @@ class SyncPackageFromMikroTikView(APIView):
                 status=503
             )
 
-<<<<<<< HEAD
         # ── 3. Unganika na MikroTik (kwa PULL) ────────────────────
-=======
-        # ── 3. Unganika na MikroTik ───────────────────────────────
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         api = get_mikrotik_connection(router)
         if not api:
             return Response({'error': 'Haiwezekani kuunganika na router'}, status=503)
@@ -141,7 +122,6 @@ class SyncPackageFromMikroTikView(APIView):
         finally:
             api.disconnect()
 
-<<<<<<< HEAD
         changes = {}
 
         if profiles:
@@ -236,98 +216,17 @@ class SyncPackageFromMikroTikView(APIView):
 
 # ══════════════════════════════════════════════════════════════
 # SYNC ALL: Sync packages zote za client mara moja (pull + push)
-=======
-        if not profiles:
-            return Response(
-                {'error': f"Profile '{package.mikrotik_profile}' haikupatikana kwenye MikroTik"},
-                status=404
-            )
-
-        profile = profiles[0]
-        changes = {}
-
-        # ── 4. Linganisha na sasisha ──────────────────────────────
-
-        # shared-users
-        mt_shared = _parse_int(profile.get('shared-users'), default=1)
-        if mt_shared != package.shared_users:
-            changes['shared_users'] = {'before': package.shared_users, 'after': mt_shared}
-            package.shared_users = mt_shared
-
-        # rate-limit → speed_up / speed_down
-        rate_limit = profile.get('rate-limit', '')
-        if rate_limit:
-            up, down = _parse_rate_limit(rate_limit)
-            if up and up != package.speed_up:
-                changes['speed_up'] = {'before': package.speed_up, 'after': up}
-                package.speed_up = up
-            if down and down != package.speed_down:
-                changes['speed_down'] = {'before': package.speed_down, 'after': down}
-                package.speed_down = down
-
-        # session-timeout → duration_value + duration_unit
-        session_timeout = profile.get('session-timeout', '')
-        if session_timeout:
-            val, unit = _parse_session_timeout(session_timeout)
-            if val and unit:
-                if val != package.duration_value or unit != package.duration_unit:
-                    changes['duration'] = {
-                        'before': f"{package.duration_value} {package.duration_unit}",
-                        'after':  f"{val} {unit}",
-                    }
-                    package.duration_value = val
-                    package.duration_unit  = unit
-
-        # ── 5. Hifadhi kama kuna mabadiliko ──────────────────────
-        if changes:
-            update_fields = ['duration_minutes']
-            if 'shared_users' in changes:
-                update_fields.append('shared_users')
-            if 'speed_up' in changes:
-                update_fields.append('speed_up')
-            if 'speed_down' in changes:
-                update_fields.append('speed_down')
-            if 'duration' in changes:
-                update_fields += ['duration_value', 'duration_unit']
-
-            package.duration_minutes = package._compute_duration_minutes()
-
-            # Tumia .update() — epuka kuita _sync_to_mikrotik tena
-            Package.objects.filter(pk=package.pk).update(
-                **{f: getattr(package, f) for f in update_fields}
-            )
-
-            logger.info(f"SyncPackage: '{package.name}' imesasishwa. Mabadiliko: {changes}")
-            return Response({
-                'synced':  True,
-                'changes': changes,
-                'message': f"Package '{package.name}' imesasishwa kutoka MikroTik ✓",
-            })
-        else:
-            return Response({
-                'synced':  False,
-                'changes': {},
-                'message': f"Package '{package.name}' iko sawa — hakuna mabadiliko",
-            })
-
-
-# ══════════════════════════════════════════════════════════════
-# SYNC ALL: Sync packages zote za client mara moja
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 # ══════════════════════════════════════════════════════════════
 
 class SyncAllPackagesFromMikroTikView(APIView):
     """
     POST /api/packages/sync-all-from-mikrotik/
     Query param: ?client=<client_id>  (inahitajika kwa superadmin)
-<<<<<<< HEAD
 
     Kwa kila package ya client:
       1. PULL kutoka router ya kwanza online (sasisha DB).
       2. PUSH kwenye routers ZOTE online za client — hivyo router
          mpya isiyo na profile fulani itaipata moja kwa moja.
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
     """
     permission_classes = [IsAuthenticated]
 
@@ -355,19 +254,12 @@ class SyncAllPackagesFromMikroTikView(APIView):
                 status=503
             )
 
-<<<<<<< HEAD
         # ── PULL: soma profiles ZOTE kutoka router ya kwanza mara moja ──
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         api = get_mikrotik_connection(router)
         if not api:
             return Response({'error': 'Haiwezekani kuunganika na router'}, status=503)
 
         try:
-<<<<<<< HEAD
-=======
-            # Soma profiles ZOTE mara moja — haraka zaidi
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
             all_profiles = api.command('/ip/hotspot/user/profile/print')
             profiles_map = {p['name']: p for p in all_profiles if 'name' in p}
         except Exception as e:
@@ -377,7 +269,6 @@ class SyncAllPackagesFromMikroTikView(APIView):
 
         results = []
         synced_count = 0
-<<<<<<< HEAD
         newly_created_total = 0
 
         for pkg in packages:
@@ -452,76 +343,12 @@ class SyncAllPackagesFromMikroTikView(APIView):
         if newly_created_total:
             message += f" — profiles {newly_created_total} zimeundwa kwenye routers mpya"
         message += " ✓"
-=======
-
-        for pkg in packages:
-            profile = profiles_map.get(pkg.mikrotik_profile)
-            if not profile:
-                results.append({
-                    'package': pkg.name,
-                    'synced': False,
-                    'reason': f"Profile '{pkg.mikrotik_profile}' haikupatikana kwenye MikroTik",
-                })
-                continue
-
-            changes = {}
-            update_fields = []
-
-            # shared-users
-            mt_shared = _parse_int(profile.get('shared-users'), default=1)
-            if mt_shared != pkg.shared_users:
-                changes['shared_users'] = {'before': pkg.shared_users, 'after': mt_shared}
-                pkg.shared_users = mt_shared
-                update_fields.append('shared_users')
-
-            # rate-limit
-            rate_limit = profile.get('rate-limit', '')
-            if rate_limit:
-                up, down = _parse_rate_limit(rate_limit)
-                if up and up != pkg.speed_up:
-                    changes['speed_up'] = {'before': pkg.speed_up, 'after': up}
-                    pkg.speed_up = up
-                    update_fields.append('speed_up')
-                if down and down != pkg.speed_down:
-                    changes['speed_down'] = {'before': pkg.speed_down, 'after': down}
-                    pkg.speed_down = down
-                    update_fields.append('speed_down')
-
-            # session-timeout
-            session_timeout = profile.get('session-timeout', '')
-            if session_timeout:
-                val, unit = _parse_session_timeout(session_timeout)
-                if val and unit:
-                    if val != pkg.duration_value or unit != pkg.duration_unit:
-                        changes['duration'] = {
-                            'before': f"{pkg.duration_value} {pkg.duration_unit}",
-                            'after':  f"{val} {unit}",
-                        }
-                        pkg.duration_value = val
-                        pkg.duration_unit  = unit
-                        update_fields += ['duration_value', 'duration_unit']
-
-            if changes:
-                pkg.duration_minutes = pkg._compute_duration_minutes()
-                update_fields.append('duration_minutes')
-                Package.objects.filter(pk=pkg.pk).update(
-                    **{f: getattr(pkg, f) for f in update_fields}
-                )
-                synced_count += 1
-                results.append({'package': pkg.name, 'synced': True, 'changes': changes})
-            else:
-                results.append({'package': pkg.name, 'synced': False, 'changes': {}})
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 
         return Response({
             'total':   packages.count(),
             'synced':  synced_count,
             'results': results,
-<<<<<<< HEAD
             'message': message,
-=======
-            'message': f"{synced_count} package(s) zimesasishwa kutoka MikroTik ✓",
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         })
 
 
@@ -582,7 +409,6 @@ def _parse_session_timeout(timeout: str):
       "24h"          → (1, "days")
       "1d 00:00:00"  → (1, "days")
       "2d 00:00:00"  → (2, "days")
-<<<<<<< HEAD
 
     KUMBUKA: kwa vile session-timeout ya MikroTik sasa ni "00:00:00"
     (unlimited) kwa package mpya au zilizo-save upya, kazi hii
@@ -590,20 +416,15 @@ def _parse_session_timeout(timeout: str):
     duration_value/duration_unit ya package (sahihi, kwa sababu muda
     halisi wa package unatokana na limit-uptime / on-login script,
     si session-timeout tena).
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
     """
     if not timeout:
         return None, None
     try:
         timeout = timeout.strip().lower()
 
-<<<<<<< HEAD
         if timeout in ('00:00:00', '0s', '0'):
             return None, None
 
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
         day_match = re.match(r'^(\d+)d', timeout)
         if day_match:
             return int(day_match.group(1)), 'days'
@@ -628,7 +449,4 @@ def _parse_session_timeout(timeout: str):
     except Exception as e:
         logger.warning(f"_parse_session_timeout failed for '{timeout}': {e}")
         return None, None
-<<<<<<< HEAD
 
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

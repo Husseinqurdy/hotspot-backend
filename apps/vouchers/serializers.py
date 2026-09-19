@@ -11,7 +11,6 @@ class VoucherSerializer(serializers.ModelSerializer):
     class Meta:
         model = Voucher
         fields = ['id','client','client_name','router_name','package_name','package_price','code','customer_phone','status','status_display','created_at','used_at','expires_at']
-<<<<<<< HEAD
         read_only_fields = fields
 
 class VoucherPrintBatchSerializer(serializers.ModelSerializer):
@@ -38,6 +37,3 @@ class DailySalesReportSerializer(serializers.ModelSerializer):
         model = DailySalesReport
         fields = ['id', 'date', 'total_vouchers_sold', 'total_revenue', 'breakdown', 'created_at']
 
-=======
-        read_only_fields = fields
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c

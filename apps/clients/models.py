@@ -23,10 +23,7 @@ MIKROTIK_FEATURES = [
     'walled_garden_ip',
     'cookies',
     'scheduler',
-<<<<<<< HEAD
     'terminal',
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
 ]
 
 
@@ -58,11 +55,6 @@ class Client(models.Model):
     is_active = models.BooleanField(default=True)
 
     # Permissions za MikroTik — list ya features zilizoruhusiwa
-<<<<<<< HEAD
-=======
-    # Kama field iko tupu (None au []), client hawezi kuona chochote
-    # Kama ina ['servers', 'users', ...], anaona hizo tu
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
     mikrotik_permissions = models.JSONField(
         default=list,
         blank=True,
@@ -81,7 +73,6 @@ class Client(models.Model):
         """Angalia kama client ana ruhusa ya feature fulani."""
         return feature in (self.mikrotik_permissions or [])
 
-<<<<<<< HEAD
     def requires_payment_identifier(self) -> bool:
         """
         True ikiwa client huyu anashirikiana kifaa cha GSM (lipa
@@ -107,8 +98,6 @@ class Client(models.Model):
         is_shared_into = GSMDevice.objects.filter(shared_with=self).exists()
         return owns_shared_device or is_shared_into
 
-=======
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
     class Meta:
         ordering = ['-created_at']
 

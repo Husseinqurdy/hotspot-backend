@@ -115,7 +115,6 @@ class ClientViewSet(viewsets.ModelViewSet):
                     'mikrotik_permissions': MIKROTIK_FEATURES,
                     'all_features': MIKROTIK_FEATURES,
                 })
-<<<<<<< HEAD
             return Response({'mikrotik_permissions': [], 'all_features': MIKROTIK_FEATURES})
 
     @action(detail=False, methods=['get', 'patch'], url_path='my-profile')
@@ -138,6 +137,3 @@ class ClientViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
-=======
-            return Response({'mikrotik_permissions': [], 'all_features': MIKROTIK_FEATURES})
->>>>>>> ce77eb29d3fbe067206773bcdacb85bba7fb4c3c
