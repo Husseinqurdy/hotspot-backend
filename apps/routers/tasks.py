@@ -271,35 +271,65 @@ def sync_voucher_status_from_mikrotik():
         moja ya voucher, weka used_at/expires_at, na uweke 'expired'
         scheduler ikitoweka.
 
-    MUHIMU SANA (bug iliyorekebishwa): kabla ya marekebisho haya, task
-    hii ilikuwa ikipitia PRESENCE PEKEE — kundi (B) halikuguswa kabisa.
-    Hii ilisababisha `Voucher.expires_at` ya vouchers za mkono kubaki
-    kwenye default ya usalama iliyowekwa wakati wa kuundwa
-    (`created_at + 2×duration_minutes`, angalia Voucher.save()) badala
-    ya kusahihishwa kulingana na wakati HALISI wa matumizi — na hivyo
-    `expire_old_vouchers` (Celery, kila saa) ilikuwa ikizifuta MAPEMA
-    SANA, ikiondoa hotspot user pekee (scheduler ya on-login ikibaki,
-    kwa sababu haikuwahi kufika kwenye muda wake wa kweli).
+    MUHIMU SANA (bug ya kwanza iliyorekebishwa): kabla ya marekebisho
+    haya, task hii ilikuwa ikipitia PRESENCE PEKEE — kundi (B)
+    halikuguswa kabisa. Hii ilisababisha `Voucher.expires_at` ya
+    vouchers za mkono kubaki kwenye default ya usalama iliyowekwa
+    wakati wa kuundwa (`created_at + 2×duration_minutes`, angalia
+    Voucher.save()) badala ya kusahihishwa kulingana na wakati HALISI
+    wa matumizi — na hivyo `expire_old_vouchers` (Celery, kila saa)
+    ilikuwa ikizifuta MAPEMA SANA, ikiondoa hotspot user pekee
+    (scheduler ya on-login ikibaki, kwa sababu haikuwahi kufika kwenye
+    muda wake wa kweli).
 
-    FIX YA PILI (sync_missing_since — 'false negative' kutoka MikroTik):
-    Kundi (B) awali lilikuwa likiamini USOMAJI MMOJA tu wa
-    '/system/scheduler/print' kuamua kama voucher imeisha — kama code
-    yake haikuonekana kwenye orodha iliyorudi, voucher iliwekwa
-    'expired' PAPO HAPO. Uchunguzi ulionyesha kwamba wakati mwingine
-    muunganiko wa MikroTik (hasa kwa mzunguko unaosoma routers/vouchers
-    nyingi kwa muda mfupi) unarudisha orodha isiyokamilika BILA kutupa
-    exception — voucher halali kabisa (ambayo scheduler yake bado ipo
-    kwenye router) inaonekana 'haipo' kwa bahati mbaya, na kufutwa
-    kimakosa dakika/masaa kabla ya wakati wake halisi (mfano: NEQH,
-    67BG, FCMT, YXFU, 4294).
+    FIX YA PILI (sync_missing_since — 'false negative' kutoka
+    MikroTik, kwa ajili ya KUTHIBITISHA 'imeisha'): Kundi (B) awali
+    lilikuwa likiamini USOMAJI MMOJA tu wa '/system/scheduler/print'
+    kuamua kama voucher imeisha — kama code yake haikuonekana kwenye
+    orodha iliyorudi, voucher iliwekwa 'expired' PAPO HAPO.
+    Uchunguzi ulionyesha kwamba wakati mwingine muunganiko wa MikroTik
+    (hasa router yenye hali ya 'flaky' ya muda mrefu) unarudisha
+    orodha isiyokamilika BILA kutupa exception — voucher halali kabisa
+    (ambayo scheduler yake bado ipo kwenye router) inaonekana 'haipo'
+    kwa bahati mbaya, mizunguko miwili mfululizo, na kufutwa kimakosa
+    kabla ya wakati wake halisi (mfano: S394, tarehe 18/09).
 
     Sasa voucher 'isiyoonekana' HAIFUTWI papo hapo — inawekewa alama
     (Voucher.sync_missing_since) na kuthibitishwa tena mzunguko
-    unaofuata (dakika 1 baadaye) kabla ya kuifanya 'expired'. Ikiwa
-    itaonekana tena kabla ya uthibitisho, alama inafutwa (ilikuwa ni
-    hitilafu ya mara moja tu). Hii inaongeza ucheleweshaji mdogo (~dakika
-    1) kwa vouchers zinazoisha KWELI, lakini inazuia kufutwa mapema
-    kimakosa kwa vouchers zenye hitilafu ya muunganiko ya mara moja.
+    unaofuata (dakika 1 baadaye) kabla ya kuifanya 'expired'. Uthibitisho
+    huu wa 'imeisha' unatumia VYANZO VIWILI huru (scheduler NA hotspot
+    user list) — voucher inahesabiwa 'bado ipo' ikiwa inaonekana
+    kwenye MOJA WAPO, kwa sababu on-event script inafuta VYOTE viwili
+    kwa wakati mmoja voucher inapoisha kweli; hivyo ni vigumu sana
+    vyanzo vyote viwili kutoa 'false negative' inayofanana kwa
+    mizunguko miwili mfululizo.
+
+    FIX YA TATU — MUHIMU SANA (bug iliyosababisha ripoti ya mauzo
+    kuvurugika, 19/09): Wakati wa KUTAMBUA 'voucher IMEANZA kutumika'
+    (yaani kuweka `used_at` kwa MARA YA KWANZA), TUSITUMIE hotspot
+    user list kama uthibitisho — hii ni TOFAUTI KABISA na
+    'kuthibitisha imeisha' (fix ya pili hapo juu). Sababu:
+
+      - SCHEDULER inaundwa na on-login script MOJA KWA MOJA na
+        MikroTik pale MTEJA ANAPOINGIA KWELI kwenye hotspot (ushahidi
+        halisi wa matumizi).
+      - HOTSPOT USER (jina la voucher kwenye '/ip/hotspot/user/print')
+        LIPO TANGU voucher ilipoUNDWA kwenye MikroTik (batch/manual
+        creation) — HATA KAMA HAIJAUZWA WALA KUTUMIKA NA MTEJA
+        YEYOTE bado.
+
+    Marekebisho ya awali (FIX ya pili) kimakosa yalitumia
+    'code_present = scheduler OR hotspot_user' KWA HATUA ZOTE MBILI
+    (kuanza kutumika NA kuthibitisha kuisha) — hii ilisababisha
+    VOUCHERS ZOTE MPYA (hata stock isiyouzwa bado) kuhesabiwa
+    'zimetumika' ndani ya dakika 1 tu baada ya kuundwa (kwa sababu
+    zipo kwenye hotspot user list tangu mwanzo), zikivuruga kabisa
+    `DailySalesReport` (inayohesabu mauzo kwa `used_at` ya siku husika)
+    kwa clients WOTE waliokuwa na vouchers za mkono/batch.
+
+    SASA: 'kuanza kutumika' kunatumia SCHEDULER PEKEE (kama
+    ilivyokuwa KABLA ya FIX ya pili) — 'kuthibitisha kuisha' pekee
+    ndiyo inayotumia vyanzo viwili (dual-check).
     """
     from apps.vouchers.models import Voucher, VoucherRouterPresence
     from .mikrotik import get_mikrotik_connection
@@ -348,13 +378,11 @@ def sync_voucher_status_from_mikrotik():
             try:
                 schedulers = api.command('/system/scheduler/print')
                 scheduler_names_by_router[router_id] = {s.get('name', '') for s in schedulers}
-                # MUHIMU: soma pia hotspot users kama uthibitisho wa PILI, HURU.
-                # Voucher inatambuliwa 'imeisha' TU ikiwa haionekani kwenye
-                # orodha ZOTE MBILI — hii inazuia 'false negative' inayotokana
-                # na MikroTik kurudisha orodha ya scheduler isiyokamilika kwa
-                # bahati mbaya wakati wa muunganiko usio thabiti (flaky), kwa
-                # sababu on-event script inafuta VYOTE viwili kwa wakati mmoja
-                # voucher inapoisha kweli.
+                # Soma pia hotspot users — kwa ajili ya UTHIBITISHO WA
+                # 'IMEISHA' PEKEE (dual-check dhidi ya false-negative ya
+                # scheduler list). HAITUMIKI kwa kutambua 'kuanza
+                # kutumika' — angalia maelezo marefu juu ya function
+                # hii (FIX YA TATU).
                 users = api.command('/ip/hotspot/user/print')
                 hotspot_user_names_by_router[router_id] = {u.get('name', '') for u in users}
             except Exception as e:
@@ -363,6 +391,7 @@ def sync_voucher_status_from_mikrotik():
                 api.disconnect()
         except Exception as e:
             logger.error(f"sync_voucher_status: connection error {router.name}: {e}")
+
     # ═══════════════════════════════════════════════════════════
     # (B) LEGACY / MANUAL — mantiki ya ZAMANI, router MOJA tu
     # ═══════════════════════════════════════════════════════════
@@ -373,14 +402,13 @@ def sync_voucher_status_from_mikrotik():
         if scheduler_names is None or hotspot_names is None:
             continue  # router haikufikika mzunguko huu (uthibitisho hauko kamili)
 
-        # Voucher inahesabiwa 'ipo' ikiwa inaonekana kwenye orodha
-        # YOYOTE kati ya mbili (scheduler AU hotspot user) — hii
-        # inazuia 'false negative' ya orodha moja kurudi isiyokamilika
-        # kwa bahati mbaya wakati wa muunganiko usio thabiti (flaky).
-        code_present = (voucher.code in scheduler_names) or (voucher.code in hotspot_names)
-
-        if code_present:
-            if voucher.used_at is None:
+        if voucher.used_at is None:
+            # MUHIMU (FIX YA TATU): 'kuanza kutumika' kunatambuliwa TU
+            # na uwepo wa SCHEDULER (inaundwa na on-login script pindi
+            # mteja anapoingia KWELI). Hotspot user list PEKEE
+            # HAITOSHI — voucher mpya iliyoundwa (bado
+            # haijauzwa/kutumika) tayari ipo humo tangu kuundwa kwake.
+            if voucher.code in scheduler_names:
                 voucher.used_at = now
                 voucher.expires_at = now + timezone.timedelta(
                     minutes=voucher.package.duration_minutes
@@ -391,34 +419,43 @@ def sync_voucher_status_from_mikrotik():
                     f"✅ Voucher {voucher.code} (manual) imeanza kutumika - "
                     f"itaisha: {voucher.expires_at}"
                 )
-            elif voucher.sync_missing_since is not None:
+            # else: bado haijatumika na mteja — hakuna cha kufanya.
+            continue
+
+        # Voucher tayari inatumika (used_at ipo) — sasa uthibitisho wa
+        # VYANZO VIWILI huru (scheduler AU hotspot user) kabla ya
+        # kuithibitisha 'imeisha' (angalia FIX YA PILI juu).
+        code_present = (voucher.code in scheduler_names) or (voucher.code in hotspot_names)
+
+        if code_present:
+            if voucher.sync_missing_since is not None:
                 # Ilikuwa 'imekosekana' mzunguko uliopita, lakini sasa
                 # imeonekana tena — ilikuwa false alarm (hitilafu ya
                 # muunganiko), si kuisha kwa kweli. Futa alama.
                 voucher.sync_missing_since = None
                 voucher.save(update_fields=['sync_missing_since'])
         else:
-            if voucher.used_at is not None:
-                if voucher.sync_missing_since is None:
-                    # Mara ya KWANZA kuikosa (kwenye orodha ZOTE MBILI)
-                    # — usiifute bado. Weka alama tu, tuithibitishe tena
-                    # mzunguko unaofuata (dakika 1) kabla ya kuiamini
-                    # imekwisha kweli.
-                    voucher.sync_missing_since = now
-                    voucher.save(update_fields=['sync_missing_since'])
-                    logger.warning(
-                        f"⚠️ Voucher {voucher.code} (manual) haionekani kwenye "
-                        f"schedulers WALA hotspot users za {voucher.router.name} "
-                        f"— inasubiri uthibitisho mzunguko ujao"
-                    )
-                else:
-                    # Mara ya PILI mfululizo kuikosa (kwenye orodha ZOTE
-                    # MBILI, mizunguko miwili tofauti) — sasa tunaithibitisha
-                    # imekwisha kweli.
-                    voucher.status = 'expired'
-                    voucher.sync_missing_since = None
-                    voucher.save(update_fields=['status', 'sync_missing_since'])
-                    logger.info(f"✅ Voucher {voucher.code} (manual) imeisha - imewekwa expired")
+            if voucher.sync_missing_since is None:
+                # Mara ya KWANZA kuikosa (kwenye orodha ZOTE MBILI) —
+                # usiifute bado. Weka alama tu, tuithibitishe tena
+                # mzunguko unaofuata (dakika 1) kabla ya kuiamini
+                # imekwisha kweli.
+                voucher.sync_missing_since = now
+                voucher.save(update_fields=['sync_missing_since'])
+                logger.warning(
+                    f"⚠️ Voucher {voucher.code} (manual) haionekani kwenye "
+                    f"schedulers WALA hotspot users za {voucher.router.name} "
+                    f"— inasubiri uthibitisho mzunguko ujao"
+                )
+            else:
+                # Mara ya PILI mfululizo kuikosa (kwenye orodha ZOTE
+                # MBILI, mizunguko miwili tofauti) — sasa tunaithibitisha
+                # imekwisha kweli.
+                voucher.status = 'expired'
+                voucher.sync_missing_since = None
+                voucher.save(update_fields=['status', 'sync_missing_since'])
+                logger.info(f"✅ Voucher {voucher.code} (manual) imeisha - imewekwa expired")
+
     # ═══════════════════════════════════════════════════════════
     # (A) PRESENCE-BASED — routers kadhaa, kama ilivyoongezwa hivi karibuni
     # ═══════════════════════════════════════════════════════════
@@ -429,16 +466,16 @@ def sync_voucher_status_from_mikrotik():
             routers_map[rid] = {'router': presence.router, 'presences': []}
         routers_map[rid]['presences'].append(presence)
 
-    # ── Hatua 1: tambua ni presence zipi zimetumika (scheduler ipo) ──
-    # hotspot user ipo — uthibitisho wa vyanzo viwili huru) ──
+    # ── Hatua 1: tambua ni presence zipi zimetumika — SCHEDULER PEKEE
+    # (FIX YA TATU: hotspot user list HAITUMIKI hapa, kwa sababu
+    # ingesababisha vouchers zote mpya kuhesabiwa 'used' papo hapo). ──
     used_presences = []  # [(presence, router)]
     for router_id, data in routers_map.items():
         scheduler_names = scheduler_names_by_router.get(router_id)
-        hotspot_names = hotspot_user_names_by_router.get(router_id)
-        if scheduler_names is None or hotspot_names is None:
+        if scheduler_names is None:
             continue  # router haikufikika mzunguko huu
         for presence in data['presences']:
-            if presence.voucher.code in scheduler_names or presence.voucher.code in hotspot_names:
+            if presence.voucher.code in scheduler_names:
                 used_presences.append(presence)
 
     for presence in used_presences:
@@ -496,10 +533,10 @@ def sync_voucher_status_from_mikrotik():
                     f"{other_router.name}: {e}"
                 )
 
-    # ── Hatua 2: vouchers zilizoisha muda kwenye router walipotumia ──
-    # (presence ambayo BADO ni 'active' kwenye router = Voucher.router,
-    # lakini scheduler NA hotspot user zimeshatoweka = muda umeisha, kwa
-    # uthibitisho wa mizunguko miwili mfululizo kama kundi B)
+    # ── Hatua 2: vouchers zilizoisha muda kwenye router walipotumia —
+    # HII ni 'kuthibitisha imeisha' (SIYO 'kuanza kutumika'), kwa hiyo
+    # dual-check (scheduler NA hotspot user) + sync_missing_since ni
+    # SAHIHI kubaki hapa (angalia FIX YA PILI). ──
     used_presence_ids = {p.id for p in used_presences}
     for router_id, data in routers_map.items():
         scheduler_names = scheduler_names_by_router.get(router_id)

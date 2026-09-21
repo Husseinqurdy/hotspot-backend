@@ -14,20 +14,32 @@ _MT_MONTHS = {
 
 def _parse_mikrotik_datetime(start_date: str, start_time: str):
     """
-    MikroTik inarudisha start-date kama 'jul/13/2026' na start-time kama
-    '14:32:07'. Hii ndiyo WAKATI HALISI scheduler ilipoundwa (yaani wakati
-    mteja aliingiza voucher) — siyo wakati sisi tunapopiga poll. Tunatumia
-    hii badala ya timezone.now() ili ripoti iwe sahihi hata kama router
-    ilikuwa offline kwa muda mrefu kabla hatujaigundua.
+    MikroTik inarudisha start-date kwa MIUNDO MIWILI kutegemea toleo la
+    RouterOS na mipangilio:
+      - 'jul/13/2026'  (muundo wa zamani)
+      - '2026-09-19'   (muundo wa ISO, unaotumika na routers zako sasa)
+    start-time ni '14:32:07'. Hii ndiyo WAKATI HALISI scheduler ilipoundwa
+    (yaani wakati mteja aliingiza voucher) — siyo wakati sisi tunapopiga
+    poll. Tunatumia hii badala ya timezone.now() ili ripoti iwe sahihi
+    hata kama router ilikuwa offline kwa muda mrefu kabla hatujaigundua.
+
+    MAREKEBISHO: toleo la awali lilielewa muundo wa 'jul/13/2026' PEKEE,
+    kwa hiyo kwa routers zenye muundo wa '2026-09-19' ilishindwa kila
+    mara na used_at ikachukua wakati wa poll (now) badala ya wakati halisi.
+
     Inarudisha None ikiwa format haieleweki (tutarudi kwenye now() salama).
     """
     try:
-        mon_str, day_str, year_str = start_date.split('/')
-        month = _MT_MONTHS.get(mon_str.strip().lower())
-        if not month:
-            return None
-        day, year = int(day_str), int(year_str)
-        hour, minute, second = (int(x) for x in start_time.strip().split(':'))
+        d = (start_date or '').strip().lower()
+        if '-' in d:
+            year, month, day = (int(x) for x in d.split('-'))
+        else:
+            mon_str, day_str, year_str = d.split('/')
+            month = _MT_MONTHS.get(mon_str.strip()[:3])
+            if not month:
+                return None
+            day, year = int(day_str), int(year_str)
+        hour, minute, second = (int(x) for x in (start_time or '').strip().split(':'))
         naive = datetime(year, month, day, hour, minute, second)
         return timezone.make_aware(naive, timezone.get_current_timezone())
     except Exception:
@@ -36,19 +48,65 @@ def _parse_mikrotik_datetime(start_date: str, start_time: str):
 
 @shared_task
 def expire_old_vouchers():
+    """
+    Weka 'expired' vouchers ambazo muda wao umeisha, na ufute hotspot user
+    kwenye router.
+
+    MAREKEBISHO: toleo la awali liliweka status='expired' hata kama router
+    haikufikika au kufuta kulishindwa. Sasa voucher inawekwa 'expired'
+    TU baada ya router kufikiwa na kufuta kufanikiwa. Vinginevyo
+    inabaki 'active' na inajaribiwa tena saa inayofuata.
+    """
     from .models import Voucher
     from apps.routers.mikrotik import get_mikrotik_connection
+
     expired = Voucher.objects.filter(
-    status='active',
-    expires_at__lt=timezone.now(),
-    used_at__isnull=False  # ← Expire tu vouchers ambazo mteja ameshaingia
+        status='active',
+        expires_at__lt=timezone.now(),
+        used_at__isnull=False,  # Expire tu vouchers ambazo mteja ameshaingia
     ).select_related('router')
-    count = 0
+
+    by_router = {}
     for v in expired:
-        api = get_mikrotik_connection(v.router)
-        if api: api.remove_hotspot_user(v.code); api.disconnect()
-        v.status = 'expired'; v.save(update_fields=['status']); count += 1
-    logger.info(f"Expired {count} vouchers")
+        by_router.setdefault(v.router_id, []).append(v)
+
+    count = 0
+    skipped = 0
+    for router_id, vouchers in by_router.items():
+        router = vouchers[0].router
+        try:
+            api = get_mikrotik_connection(router)
+        except Exception as e:
+            logger.error(f"expire_old_vouchers: hitilafu ya muunganiko {router.name}: {e}")
+            api = None
+
+        if not api:
+            skipped += len(vouchers)
+            logger.warning(
+                f"expire_old_vouchers: {router.name} haifikiki — vouchers "
+                f"{len(vouchers)} zinabaki 'active', zitajaribiwa tena"
+            )
+            continue
+
+        try:
+            for v in vouchers:
+                try:
+                    removed = api.remove_hotspot_user(v.code)
+                except Exception as e:
+                    logger.error(f"expire_old_vouchers: kufuta {v.code} kumeshindwa: {e}")
+                    removed = False
+
+                if not removed:
+                    skipped += 1
+                    continue
+
+                v.status = 'expired'
+                v.save(update_fields=['status'])
+                count += 1
+        finally:
+            api.disconnect()
+
+    logger.info(f"Expired {count} vouchers (zilizoruka: {skipped})")
 
 
 @shared_task
@@ -187,9 +245,12 @@ def check_voucher_usage():
             real_used_at = _parse_mikrotik_datetime(
                 sched.get('start-date', ''), sched.get('start-time', '')
             )
-            # Ikiwa MikroTik format haikueleweka kwa sababu yoyote, tumia
-            # wakati wa sasa kama salama badala ya kuvunja kabisa.
-            v.used_at = real_used_at or now
+            # Ikiwa MikroTik format haikueleweka, au wakati uliosomwa uko
+            # MBELE ya sasa (saa ya router si sahihi), tumia wakati wa sasa
+            # kama salama badala ya kuvunja kabisa.
+            if real_used_at is None or real_used_at > now:
+                real_used_at = now
+            v.used_at = real_used_at
 
             # ── MUHIMU (fix ya kufutwa mapema): sahihisha expires_at HAPA
             # kutoka wakati HALISI wa matumizi + muda wa package. Bila hii,
