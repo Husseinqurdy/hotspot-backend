@@ -221,9 +221,23 @@ class GenerateVoucherPDFView(APIView):
 class DailySalesReportViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Ripoti za mauzo za kila siku (Sehemu ya 2 ya Analysis page).
-    Query param ya hiari: ?days=30 (default: zote).
+
+    Query params (zote hiari, zinaweza kuchanganywa):
+      ?days=30                        — siku N zilizopita kutoka leo
+      ?start=2026-08-01&end=2026-09-30 — range maalum (custom range, siku
+                                          zozote — mwezi, siku 60, n.k.)
+      ?client=5                        — (superadmin pekee) client mahususi
+
+    MUHIMU: pagination_class = None — bila hii, DRF ilikuwa ikirudisha
+    ukurasa wa KWANZA TU (PAGE_SIZE=20 settings.py), ikikata ripoti
+    yoyote ya zaidi ya siku 20 bila kujali 'days'/'start'/'end'
+    iliyoombwa. Ripoti hizi ni ndogo sana kwa asili (rekodi MOJA kwa
+    kila siku kwa kila client) — hata miaka kadhaa ya data haiwezi
+    kuzidi mamia machache ya rekodi, hivyo kuzima pagination ni salama
+    kabisa hapa.
     """
     permission_classes = [IsAuthenticated]
+    pagination_class = None
 
     def get_serializer_class(self):
         from .serializers import DailySalesReportSerializer
@@ -233,17 +247,142 @@ class DailySalesReportViewSet(viewsets.ReadOnlyModelViewSet):
         from .models import DailySalesReport
         if self.request.user.is_superadmin():
             qs = DailySalesReport.objects.select_related('client').all()
+            client_id = self.request.query_params.get('client')
+            if client_id:
+                qs = qs.filter(client_id=client_id)
         else:
             qs = DailySalesReport.objects.filter(client__user=self.request.user)
 
-        days = self.request.query_params.get('days')
-        if days:
+        qs = self._apply_date_filters(qs)
+        return qs
+
+    def _apply_date_filters(self, qs):
+        """
+        Inatumika na get_queryset() NA export_pdf() — 'start'/'end'
+        (custom range) vina kipaumbele juu ya 'days' (preset) endapo
+        vyote vimetolewa kwa pamoja.
+        """
+        from django.utils import timezone
+        from datetime import timedelta, date as date_cls
+
+        start = self.request.query_params.get('start')
+        end = self.request.query_params.get('end')
+        if start:
             try:
-                from django.utils import timezone
-                from datetime import timedelta
-                cutoff = timezone.localdate() - timedelta(days=int(days))
-                qs = qs.filter(date__gte=cutoff)
+                qs = qs.filter(date__gte=date_cls.fromisoformat(start))
             except ValueError:
                 pass
+        if end:
+            try:
+                qs = qs.filter(date__lte=date_cls.fromisoformat(end))
+            except ValueError:
+                pass
+
+        if not start and not end:
+            days = self.request.query_params.get('days')
+            if days:
+                try:
+                    cutoff = timezone.localdate() - timedelta(days=int(days))
+                    qs = qs.filter(date__gte=cutoff)
+                except ValueError:
+                    pass
         return qs
+
+    @action(detail=False, methods=['get'], url_path='export-pdf')
+    def export_pdf(self, request):
+        """
+        Pakua PDF ya ripoti ya mauzo kwa range iliyochaguliwa — inatumia
+        query params zile zile za get_queryset() (?days= au ?start=&end=,
+        na ?client= kwa superadmin).
+        """
+        from django.http import HttpResponse
+        from weasyprint import HTML
+        from django.utils import timezone
+
+        qs = self.get_queryset().order_by('date')
+        reports = list(qs)
+
+        if not reports:
+            return Response({'error': 'Hakuna data kwa muda uliochagua'}, status=404)
+
+        start_param = request.query_params.get('start')
+        end_param = request.query_params.get('end')
+        if start_param and end_param:
+            range_label = f"{start_param} hadi {end_param}"
+        else:
+            range_label = f"Siku {len(reports)} za mwisho (tarehe {reports[0].date} hadi {reports[-1].date})"
+
+        multi_client = request.user.is_superadmin() and not request.query_params.get('client')
+        business_name = 'Clients Wote' if multi_client else reports[0].client.business_name
+
+        total_vouchers = sum(r.total_vouchers_sold for r in reports)
+        total_revenue = sum(r.total_revenue for r in reports)
+
+        # Kama ni multi-client (superadmin, bila client filter), unganisha
+        # kwa tarehe moja (jumla ya clients wote siku hiyo) ili jedwali
+        # lisome vizuri — vinginevyo (client mmoja) ni safi tayari.
+        if multi_client:
+            merged = {}
+            for r in reports:
+                merged.setdefault(r.date, {'vouchers': 0, 'revenue': 0})
+                merged[r.date]['vouchers'] += r.total_vouchers_sold
+                merged[r.date]['revenue'] += r.total_revenue
+            rows = [
+                {'date': d, 'vouchers': v['vouchers'], 'revenue': v['revenue']}
+                for d, v in sorted(merged.items())
+            ]
+        else:
+            rows = [
+                {'date': r.date, 'vouchers': r.total_vouchers_sold, 'revenue': r.total_revenue}
+                for r in reports
+            ]
+
+        rows_html = ''.join(
+            f"<tr><td>{r['date'].strftime('%d/%m/%Y')}</td>"
+            f"<td style='text-align:center'>{r['vouchers']}</td>"
+            f"<td style='text-align:right'>{r['revenue']:,.0f}</td></tr>"
+            for r in rows
+        )
+
+        html = f"""
+        <html>
+        <head>
+        <style>
+            @page {{ size: A4; margin: 18mm 15mm; }}
+            body {{ font-family: Helvetica, Arial, sans-serif; color: #1c2833; font-size: 12px; }}
+            h1 {{ font-size: 20px; color: #154360; margin-bottom: 2px; }}
+            .meta {{ color: #5d6d7e; font-size: 12px; margin-bottom: 18px; }}
+            .summary {{ display: flex; gap: 20px; margin-bottom: 20px; }}
+            .box {{ background: #eaf2f8; border-radius: 8px; padding: 12px 18px; }}
+            .box .label {{ font-size: 10px; color: #5d6d7e; text-transform: uppercase; }}
+            .box .value {{ font-size: 20px; font-weight: 700; color: #154360; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+            th {{ background: #154360; color: #fff; text-align: left; padding: 8px 10px; font-size: 11px; }}
+            td {{ border-bottom: 1px solid #d5dbdb; padding: 6px 10px; font-size: 11px; }}
+            tr:nth-child(even) td {{ background: #f8f9f9; }}
+            .footer {{ margin-top: 30px; font-size: 9px; color: #95a5a6; text-align: center; }}
+        </style>
+        </head>
+        <body>
+            <h1>Ripoti ya Mauzo — {business_name}</h1>
+            <p class="meta">Kipindi: {range_label} &nbsp;|&nbsp; Imetengenezwa: {timezone.localtime().strftime('%d/%m/%Y %H:%M')}</p>
+            <div class="summary">
+                <div class="box"><div class="label">Jumla ya Vouchers</div><div class="value">{total_vouchers}</div></div>
+                <div class="box"><div class="label">Jumla ya Mapato</div><div class="value">TZS {total_revenue:,.0f}</div></div>
+                <div class="box"><div class="label">Wastani/Siku</div><div class="value">TZS {(total_revenue / len(rows) if rows else 0):,.0f}</div></div>
+            </div>
+            <table>
+                <thead><tr><th>Tarehe</th><th style="text-align:center">Vouchers</th><th style="text-align:right">Mapato (TZS)</th></tr></thead>
+                <tbody>{rows_html}</tbody>
+            </table>
+            <p class="footer">NetSafi Hotspot Management — Ripoti hii imetengenezwa kiotomatiki</p>
+        </body>
+        </html>
+        """
+
+        pdf_bytes = HTML(string=html).write_pdf()
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        filename = f"ripoti_mauzo_{reports[0].date}_{reports[-1].date}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 

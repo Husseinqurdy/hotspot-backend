@@ -88,6 +88,36 @@ class SuperAdminDashboardView(APIView):
                 'total_gsm_devices': GSMDevice.objects.filter(client=c).count(),
             })
 
+                # ── Ongezeko la Clients na Routers kwa kila mwezi (miezi 6
+        # iliyopita, ikijumuisha huu wa sasa) ──
+        import calendar
+        months_back = 6
+        month_keys, month_labels = [], []
+        cursor = today.replace(day=1)
+        for _ in range(months_back):
+            month_keys.append((cursor.year, cursor.month))
+            month_labels.append(f"{calendar.month_abbr[cursor.month]} {cursor.year}")
+            cursor = (cursor.replace(day=1) - timezone.timedelta(days=1)).replace(day=1)
+        month_keys.reverse()
+        month_labels.reverse()
+
+        clients_by_month = {mk: 0 for mk in month_keys}
+        for c in Client.objects.filter(created_at__year__gte=month_keys[0][0]):
+            key = (c.created_at.year, c.created_at.month)
+            if key in clients_by_month:
+                clients_by_month[key] += 1
+
+        routers_by_month = {mk: 0 for mk in month_keys}
+        for r in MikroTikRouter.objects.filter(created_at__year__gte=month_keys[0][0]):
+            key = (r.created_at.year, r.created_at.month)
+            if key in routers_by_month:
+                routers_by_month[key] += 1
+
+        growth_by_month = [
+            {'month': month_labels[i], 'clients': clients_by_month[month_keys[i]], 'routers': routers_by_month[month_keys[i]]}
+            for i in range(months_back)
+        ]
+
         return Response({
             'stats': {
                 'total_clients': Client.objects.count(),
@@ -100,6 +130,7 @@ class SuperAdminDashboardView(APIView):
                 # HII INABAKI GLOBAL KWA MAKUSUDI: superadmin pekee
                 # anaona jumla ya vifaa vya mfumo mzima — si isolation
                 # bug, endpoint hii ni ya superadmin, si ya client.
+                'growth_by_month': growth_by_month,
                 'total_devices': GSMDevice.objects.count(),
                 'active_devices': GSMDevice.objects.filter(is_active=True).count(),
                 'pending_jobs': MikroTikJob.objects.filter(status='pending').count(),
@@ -154,6 +185,36 @@ class ClientDashboardView(APIView):
             }
             for v in today_vouchers.select_related('package').order_by('-created_at')[:10]
         ]
+        
+                # ── Vocha za saa kwa saa (kwa 'Leo' bar chart) — kulingana na
+        # USED_AT (zilizoingia kwenye scheduler = zimetumika kweli),
+        # SIYO created_at — sawa na jinsi DailySalesReport inavyohesabu.
+        used_today = Voucher.objects.filter(
+            client=client, used_at__date=today
+        ).select_related('package')
+
+        hourly_counts = {h: 0 for h in range(24)}
+        for v in used_today:
+            hourly_counts[timezone.localtime(v.used_at).hour] += 1
+        hourly_vouchers = [
+            {'hour': f'{h:02d}:00', 'count': hourly_counts[h]}
+            for h in range(24)
+        ]
+
+        # ── Mgawanyo kwa Package (kwa 'circle/donut' chart) ──
+        package_counts = {}
+        for v in used_today:
+            name = v.package.name if v.package else 'Nyingine'
+            package_counts[name] = package_counts.get(name, 0) + 1
+        total_used_today = sum(package_counts.values())
+        package_breakdown = [
+            {
+                'name': name,
+                'count': count,
+                'percent': round(count / total_used_today * 100, 1) if total_used_today else 0,
+            }
+            for name, count in sorted(package_counts.items(), key=lambda x: -x[1])
+        ]
 
         return Response({
             'client': {
@@ -167,6 +228,8 @@ class ClientDashboardView(APIView):
                 'requires_payment_identifier': client.requires_payment_identifier(),
             },
             'lipa_numbers': lipa_numbers,
+            'hourly_vouchers': hourly_vouchers,
+            'package_breakdown': package_breakdown,
             'stats': {
                 'total_routers': MikroTikRouter.objects.filter(client=client).count(),
                 'online_routers': MikroTikRouter.objects.filter(client=client, is_online=True).count(),
