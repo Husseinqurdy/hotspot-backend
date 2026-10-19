@@ -1,5 +1,5 @@
 /*
- * NETSAFI ADS WIDGET v1.1 - inaunga mkono CHAP authentication
+ * NETSAFI ADS WIDGET v1.2 - CHAP + kitufe cha sauti kwenye video
  * ============================================================
  * JINSI YA KUTUMIA (kwa kila client, mara MOJA tu):
  *
@@ -72,6 +72,10 @@
       'border-radius:10px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.12);' +
       'background:#fff;}' +
       '.ns-ad-media{width:100%;display:block;cursor:pointer;}' +
+      '.ns-video-wrap{position:relative;}' +
+      '.ns-sound-btn{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.7);' +
+      'color:#fff;border:none;border-radius:999px;padding:7px 14px;font-size:12px;' +
+      'font-weight:600;cursor:pointer;line-height:1;}' +
       '.ns-ad-label{font-size:11px;letter-spacing:.05em;text-transform:uppercase;' +
       'color:#888;padding:6px 10px 0;}' +
       '.ns-ad-title{font-size:14px;font-weight:600;padding:2px 10px 10px;color:#222;}' +
@@ -158,6 +162,8 @@
       media = document.createElement('video');
       media.src = ad.media_url;
       media.autoplay = true;
+      // Lazima ianze kimya: browsers zinakataa autoplay yenye sauti. Mteja
+      // anawasha sauti kwa kitufe hapa chini (kubonyeza kunaruhusu sauti).
       media.muted = true;
       media.loop = true;
       media.playsInline = true;
@@ -174,7 +180,33 @@
         window.open(ad.click_url, '_blank');
       });
     }
-    box.appendChild(media);
+    if (ad.ad_type === 'video') {
+      var wrap = document.createElement('div');
+      wrap.className = 'ns-video-wrap';
+      wrap.appendChild(media);
+
+      // \uD83D\uDD0A = speaker on, \uD83D\uDD07 = speaker off (escapes: salama kwa encoding yoyote ya page)
+      var ON_TXT = '\uD83D\uDD0A Washa sauti';
+      var OFF_TXT = '\uD83D\uDD07 Zima sauti';
+      var soundBtn = document.createElement('button');
+      soundBtn.type = 'button';
+      soundBtn.className = 'ns-sound-btn';
+      soundBtn.textContent = ON_TXT;
+      soundBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        media.muted = !media.muted;
+        if (!media.muted) {
+          var pr = media.play();
+          if (pr && pr.catch) pr.catch(function () {});
+        }
+        soundBtn.textContent = media.muted ? ON_TXT : OFF_TXT;
+      });
+      wrap.appendChild(soundBtn);
+      box.appendChild(wrap);
+    } else {
+      box.appendChild(media);
+    }
 
     var title = document.createElement('div');
     title.className = 'ns-ad-title';
@@ -283,4 +315,5 @@
     init();
   }
 })();
+
 

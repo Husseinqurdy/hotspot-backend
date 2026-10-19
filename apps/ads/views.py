@@ -1,4 +1,5 @@
 import logging
+import random
 from datetime import timedelta
 
 from django.utils import timezone
@@ -60,8 +61,13 @@ class AdvertisementViewSet(viewsets.ModelViewSet):
 def active_ad(request):
     """
     GET /api/ads/active/?router_id=5
-    Inarudisha ad yenye kipaumbele cha juu zaidi inayofaa kwa router hii
-    (kutoka mtandao mzima wa ads - client wa router hii si muhimu hapa).
+    Inarudisha ad moja inayofaa kwa router hii (kutoka mtandao mzima wa ads -
+    client wa router hii si muhimu hapa).
+
+    ROTATION: kila page inapopakiwa, ad huchaguliwa kwa bahati lakini kwa "uzito"
+    wa priority. Ads zenye priority sawa zinazunguka kwa usawa; ad yenye priority
+    kubwa inaonekana mara nyingi zaidi (mf. priority 3 ni mara 3 ya priority 1).
+    Priority ya chini ya 1 inahesabiwa kama 1, ili kila ad inayofaa ipate nafasi.
     """
     router_id = request.GET.get('router_id')
     if not router_id:
@@ -91,9 +97,13 @@ def active_ad(request):
     if not matching:
         return Response({"ad": None})
 
-    ad = matching[0]
+    weights = [max(a.priority, 1) for a in matching]
+    ad = random.choices(matching, weights=weights, k=1)[0]
     serializer = PublicAdSerializer(ad, context={'request': request})
-    return Response({"ad": serializer.data})
+    response = Response({"ad": serializer.data})
+    # Jibu halipaswi kuhifadhiwa na browser/proxy, vinginevyo rotation inagandamana
+    response['Cache-Control'] = 'no-store'
+    return response
 
 
 @api_view(['POST'])
@@ -273,4 +283,5 @@ def ad_report(request):
         "click_through_rate_percent": ctr,
         "total_sponsored_grants": total_sponsored_grants,
     })
+
 
