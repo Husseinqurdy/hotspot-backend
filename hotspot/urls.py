@@ -34,6 +34,7 @@ urlpatterns = [
     path('api/sms/', include('apps.sms.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/ads/', include('apps.ads.urls')),
+    path('api/accounting/', include('apps.accounting.urls')),
     # MikroTik Job Polling (VPN)
     path('api/jobs/pending/', PendingJobsView.as_view()),
     path('api/jobs/complete/', CompleteJobView.as_view()),
