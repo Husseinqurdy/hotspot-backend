@@ -63,7 +63,7 @@ class SiteViewSet(viewsets.ModelViewSet):
     permission_classes = [IsSuperAdmin]
     pagination_class = None
     queryset = Site.objects.all()
-    http_method_names = ['get', 'post', 'patch', 'head', 'options']   # hakuna kufuta; zima kwa is_active
+    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']   # DELETE inaruhusiwa tu kwa site isiyo na rekodi
 
     def perform_create(self, s):
         o = s.save()
@@ -73,6 +73,17 @@ class SiteViewSet(viewsets.ModelViewSet):
         before = snap(s.instance, ['name', 'note', 'is_active'])
         o = s.save()
         log(self.request, 'site_update', f'site:{o.id}', o.name, changes=diff(before, snap(o, ['name', 'note', 'is_active'])))
+
+
+    def destroy(self, request, *args, **kwargs):
+        site = self.get_object()
+        if site.entries.exists():   # pamoja na rekodi zilizofutwa — vitabu vya zamani havipotei
+            return Response({'error': 'Site ina rekodi, haiwezi kufutwa. Izime badala yake.'}, status=409)
+        snapshot = snap(site, ['name', 'note', 'is_active'])
+        name, sid = site.name, site.id
+        site.delete()
+        log(request, 'site_delete', f'site:{sid}', name, snapshot=snapshot)
+        return Response(status=204)
 
 
 class EntryViewSet(viewsets.ModelViewSet):
@@ -181,12 +192,14 @@ class ExportView(APIView):
         if kind not in ('xlsx', 'pdf'):
             raise ValidationError({'type': "Lazima iwe 'xlsx' au 'pdf'."})
         site, df, dt = params(request)
+        lang = request.query_params.get('lang', 'sw')
+        lang = lang if lang in ('sw', 'en') else 'sw'
         from . import export
         try:
-            data, mime = export.build(kind, site, df, dt)
+            data, mime = export.build(kind, site, df, dt, lang)
         except ImportError as e:
             return Response({'error': f'Maktaba haipo: {e.name}. Isakinishe (pip install).'}, status=501)
-        log(request, 'export', site_name=_site_name(site), type=kind, site=site,
+        log(request, 'export', site_name=_site_name(site), type=kind, lang=lang, site=site,
             date_from=_plain(df), date_to=_plain(dt))
         resp = HttpResponse(data, content_type=mime)
         resp['Content-Disposition'] = f'attachment; filename="uhasibu-{date.today():%Y%m%d}.{kind}"'
