@@ -23,7 +23,7 @@ urlpatterns = [
     # Dashboards
     path('api/dashboard/superadmin/', SuperAdminDashboardView.as_view()),
     path('api/dashboard/client/', ClientDashboardView.as_view()),
-
+    
     # Resources
     path('api/clients/', include('apps.clients.urls')),
     path('api/routers/', include('apps.routers.urls')),
@@ -35,6 +35,8 @@ urlpatterns = [
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/ads/', include('apps.ads.urls')),
     path('api/accounting/', include('apps.accounting.urls')),
+    path('api/tracking/', include('apps.tracking.urls')),
+    
     # MikroTik Job Polling (VPN)
     path('api/jobs/pending/', PendingJobsView.as_view()),
     path('api/jobs/complete/', CompleteJobView.as_view()),
